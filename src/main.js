@@ -13,6 +13,9 @@ import {
   drawStartScreen,
   drawGameOverScreen,
   drawCombo,
+  holdCombo,
+  updateCombo,
+  clearCombo,
   hitPauseButton,
   drawPauseMenu,
   pauseMenuItemAt,
@@ -110,6 +113,7 @@ function setRun(run) {
   applyDebug(run);
   bot.reset();
   clearPopups();
+  clearCombo();
 }
 
 function startRun(forceTutorial = false) {
@@ -295,8 +299,8 @@ function handleRunEvents(run) {
         playSfx(e.result === 'sketchy' ? 'sketchy' : 'land');
         if (e.tricks > 0) {
           playSfx('combo', { points: e.points });
-          if (e.result === 'sketchy') addPopup('SKETCHY! +' + e.points, COL.orange);
-          else addPopup('+' + e.points, COL.mint);
+          if (e.result === 'sketchy') holdCombo(e.chain, 'SKETCHY! +' + e.points, COL.orange, renderer.width);
+          else holdCombo(e.chain, '+' + e.points, COL.mint, renderer.width);
           if (e.points > CONFIG.haptics.bigComboPoints) vibrate(CONFIG.haptics.bigCombo);
         }
         break;
@@ -375,6 +379,7 @@ function tick(dt) {
     case 'dead':
       stepRun(game.run, dt, CONFIG);
       updatePopups(dt, CONFIG);
+      updateCombo(dt, CONFIG);
       break;
     case 'play': {
       applyDebug(game.run);
@@ -385,6 +390,7 @@ function tick(dt) {
       stepRun(game.run, dt, CONFIG);
       setMusicTier(game.run.world.tier);
       updatePopups(dt, CONFIG);
+      updateCombo(dt, CONFIG);
       if (game.tutorial) updateTutorial(dt);
       else if (game.run.over && game.run.downTime >= CONFIG.bail.gameOverDelay) gameOver();
       break;
@@ -409,7 +415,7 @@ function render() {
       drawStartScreen(g, W, H, game.time, game.touch, BUILD, CONFIG);
     } else {
       drawHud(g, W, run, game.best, sprites);
-      drawCombo(g, W, run.tricks);
+      drawCombo(g, W, run.tricks, CONFIG);
       if (game.tutorial && !run.down) {
         const text = tutorialPrompt(run.world.distance, game.touch);
         if (text) drawPrompt(g, W, text);

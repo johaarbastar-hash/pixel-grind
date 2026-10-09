@@ -45,34 +45,69 @@ export function drawHud(g, W, run, best, sprites) {
 
 // --- Combo chain ---------------------------------------------------------------
 // While a combo is live: the trick chain ("KICKFLIP + GRIND") and its value
-// with the multiplier ("220 x2").
+// with the multiplier ("220 x2"). After landing, the chain stays up for
+// CONFIG.ui.comboHoldTime with the result under it ("+220" / "SKETCHY! +110"),
+// unless a new combo with tricks takes its place.
 
-let comboLen = -1;
-let comboPts = -1;
-let comboLine1 = '';
-let comboLine2 = '';
+const COMBO_Y = 38;
 
-export function drawCombo(g, W, s) {
-  if (!s.live || s.comboTricks === 0) return;
-  const value = comboValue(s);
-  if (s.chain.length !== comboLen || value !== comboPts) {
-    comboLen = s.chain.length;
-    comboPts = value;
-    const maxChars = Math.floor((W - 16) / CHAR_W);
-    let line = TRICK_NAMES[s.chain[s.chain.length - 1]];
-    for (let i = s.chain.length - 2; i >= 0; i--) {
-      const next = TRICK_NAMES[s.chain[i]] + ' + ' + line;
-      if (next.length > maxChars - 4) {
-        line = '... ' + line;
-        break;
-      }
-      line = next;
-    }
-    comboLine1 = line;
-    comboLine2 = value + ' x' + multiplier(s);
+// Newest tricks win when the chain is too long for the screen.
+function chainText(chain, W) {
+  const maxChars = Math.floor((W - 16) / CHAR_W);
+  let line = TRICK_NAMES[chain[chain.length - 1]];
+  for (let i = chain.length - 2; i >= 0; i--) {
+    const next = TRICK_NAMES[chain[i]] + ' + ' + line;
+    if (next.length > maxChars - 4) return '... ' + line;
+    line = next;
   }
-  drawText(g, comboLine1, W >> 1, 38, COL.cream, { align: 'center', shadow: COL.ink });
-  drawText(g, comboLine2, W >> 1, 48, COL.gold, { align: 'center', shadow: COL.ink });
+  return line;
+}
+
+let liveLen = -1;
+let livePts = -1;
+let liveLine1 = '';
+let liveLine2 = '';
+const held = { line1: '', line2: '', color: '', age: 0, active: false };
+
+// Called when a combo banks: keep its chain on screen with the result.
+export function holdCombo(chain, result, color, W) {
+  held.line1 = chainText(chain, W);
+  held.line2 = result;
+  held.color = color;
+  held.age = 0;
+  held.active = true;
+}
+
+export function updateCombo(dt, cfg) {
+  if (!held.active) return;
+  held.age += dt;
+  if (held.age >= cfg.ui.comboHoldTime) held.active = false;
+}
+
+export function clearCombo() {
+  held.active = false;
+}
+
+export function drawCombo(g, W, s, cfg) {
+  if (s.live && s.comboTricks > 0) {
+    held.active = false;
+    const value = comboValue(s);
+    if (s.chain.length !== liveLen || value !== livePts) {
+      liveLen = s.chain.length;
+      livePts = value;
+      liveLine1 = chainText(s.chain, W);
+      liveLine2 = value + ' x' + multiplier(s);
+    }
+    drawText(g, liveLine1, W >> 1, COMBO_Y, COL.cream, { align: 'center', shadow: COL.ink });
+    drawText(g, liveLine2, W >> 1, COMBO_Y + 10, COL.gold, { align: 'center', shadow: COL.ink });
+    return;
+  }
+  if (!held.active) return;
+  // Blink out over the last 20%.
+  const hold = cfg.ui.comboHoldTime;
+  if (held.age > hold * 0.8 && Math.floor(held.age * 16) % 2 === 1) return;
+  drawText(g, held.line1, W >> 1, COMBO_Y, COL.cream, { align: 'center', shadow: COL.ink });
+  drawText(g, held.line2, W >> 1, COMBO_Y + 10, held.color, { align: 'center', shadow: COL.ink });
 }
 
 function blinkOn(t, cfg) {

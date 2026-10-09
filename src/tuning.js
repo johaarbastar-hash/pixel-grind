@@ -47,6 +47,7 @@ const SPECS = [
     ['randomExtra', 0, 3, 0.1],
   ]],
   ['score', [['pxPerPoint', 1, 50, 1]]],
+  ['ui', [['comboHoldTime', 0.2, 3, 0.1]]],
   ['bail', [
     ['slideTime', 0.1, 1.5, 0.05],
     ['retryDelay', 0, 2, 0.05],

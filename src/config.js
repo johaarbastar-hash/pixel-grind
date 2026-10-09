@@ -172,7 +172,8 @@ export const CONFIG = {
     blinkPeriod: 0.5, // s per on/off phase of blinking prompts
     rollFrameTime: 0.12, // s per rolling animation frame
     rotateFrameTime: 0.8, // s per frame of the rotate-your-phone animation
-    popupTime: 1.0, // s a trick-name popup stays up
+    comboHoldTime: 1.0, // s the trick chain stays up after landing, with the result
+    popupTime: 1.0, // s a popup stays up
     popupRise: 6, // px a popup drifts up over its life
   },
 

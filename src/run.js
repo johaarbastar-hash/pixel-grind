@@ -11,7 +11,7 @@
 //   { type: 'flipStart', trick }               a flip started spinning
 //   { type: 'trick', trick }                   a flip landed in the air
 //   { type: 'grind' } { type: 'grindEnd' }     started / stopped grinding
-//   { type: 'land', result, points, tricks }   combo banked on the ground
+//   { type: 'land', result, points, tricks, chain }   combo banked on the ground
 //   { type: 'bail', reason }                   went down
 //   { type: 'respawn' }
 //   { type: 'token' }                          picked up a token
@@ -200,9 +200,11 @@ function handlePlayerEvents(run, cfg) {
         } else if (e.surface === 'ground' && s.live) {
           // A rail landing keeps the combo going; the ground banks it.
           const tricks = s.comboTricks;
+          // Copied now: a buffered ollie can start a new combo in this same tick.
+          const chain = tricks > 0 ? s.chain.slice() : null;
           const fraction = e.result === 'sketchy' ? cfg.landing.sketchyBank : 1;
           const points = bankCombo(s, fraction);
-          run.events.push({ type: 'land', result: e.result, points, tricks });
+          run.events.push({ type: 'land', result: e.result, points, tricks, chain });
         }
         break;
       case 'fell': {
