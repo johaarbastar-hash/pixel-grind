@@ -32,6 +32,10 @@ Landing with the flip finished is clean; with 60 ms or less of spin left it's SK
 - 3 boards, an extra one every 10,000 points (max 5). A bail costs a board; you respawn after 1.5 s with the road ahead cleared, 1 s of invulnerability and 15% less speed (back to full over 5 s).
 - HUD: score, hi-score, boards and a pause button (top-right; touches there never ollie).
 
+## Sound
+
+Everything is synthesized with the Web Audio API (`src/audio.js`): no audio files. A chiptune loop (triangle bass, 25% pulse lead, noise drums) runs on a lookahead scheduler tied to the audio clock, and steps up in tempo with each tier. Sound effects for ollies, landings, sketchy landings, flips, grinds, tokens, combos, bails, extra boards, menus, game over and new high scores. The pause menu has resume, sound on/off (saved; M on the keyboard), replay tutorial and quit. Android phones buzz on a bail and double-pulse on combos over 1,000. On iPhone, the silent switch mutes web audio.
+
 ## Obstacles and difficulty
 
 Obstacles come in hand-authored segments (`src/segments.js`), each tagged with the tier it unlocks at. Tiers unlock by run time (45 / 90 / 150 s) and speed eases from 100 to 200 px/s over 180 s. Spacing inside a segment stretches with speed, and the space between segments is never less than speed x (ollie airtime + 0.4 s). The first run starts with a 30-second tutorial (bails rewind to the last checkpoint).

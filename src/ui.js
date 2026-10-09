@@ -165,12 +165,36 @@ export function drawPopups(g, W, cfg) {
   }
 }
 
-export function drawPausedScreen(g, W, H, t, touch, sprites, cfg) {
+// --- Pause menu ------------------------------------------------------------------
+// Rows are big touch targets; the selected one is boxed (keyboard: up / down,
+// Space to pick).
+
+const MENU_TOP = 60;
+const MENU_ROW = 18;
+const MENU_HALF_W = 76;
+
+// Index of the menu row at internal point (x, y), or -1.
+export function pauseMenuItemAt(x, y, W, count) {
+  const cx = W >> 1;
+  if (x < cx - MENU_HALF_W || x > cx + MENU_HALF_W) return -1;
+  const i = Math.floor((y - MENU_TOP + 5) / MENU_ROW);
+  return i >= 0 && i < count ? i : -1;
+}
+
+export function drawPauseMenu(g, W, H, items, selected, sprites) {
   const cx = W >> 1;
   g.drawImage(sprites.checker, 0, 0);
-  drawText(g, 'PAUSED', cx, 56, COL.cream, { align: 'center', scale: 2, shadow: COL.ink });
-  if (blinkOn(t, cfg)) {
-    drawText(g, touch ? 'TAP TO RESUME' : 'SPACE TO RESUME', cx, 90, COL.gold, { align: 'center', shadow: COL.ink });
+  drawText(g, 'PAUSED', cx, 30, COL.cream, { align: 'center', scale: 2, shadow: COL.ink });
+  for (let i = 0; i < items.length; i++) {
+    const y = MENU_TOP + i * MENU_ROW;
+    if (i === selected) {
+      g.fillStyle = COL.indigo;
+      g.fillRect(cx - MENU_HALF_W, y - 5, MENU_HALF_W * 2, MENU_ROW - 1);
+      g.fillStyle = COL.gold;
+      g.fillRect(cx - MENU_HALF_W, y - 5, 2, MENU_ROW - 1);
+      g.fillRect(cx + MENU_HALF_W - 2, y - 5, 2, MENU_ROW - 1);
+    }
+    drawText(g, items[i], cx, y, i === selected ? COL.gold : COL.cream, { align: 'center', shadow: COL.ink });
   }
 }
 

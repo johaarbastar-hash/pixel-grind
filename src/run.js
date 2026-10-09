@@ -7,6 +7,8 @@
 // invulnerability. With no boards left the run is over (run.over).
 //
 // UI-facing happenings are pushed to run.events (drained by main.js):
+//   { type: 'launch', kind }                   ollie / pop ('ollie') or kicker
+//   { type: 'flipStart', trick }               a flip started spinning
 //   { type: 'trick', trick }                   a flip landed in the air
 //   { type: 'grind' } { type: 'grindEnd' }     started / stopped grinding
 //   { type: 'land', result, points, tricks }   combo banked on the ground
@@ -173,6 +175,10 @@ function handlePlayerEvents(run, cfg) {
       case 'launch':
         if (!s.live) startCombo(s);
         if (e.kind === 'ollie') addTrick(s, 'ollie', cfg);
+        run.events.push(e);
+        break;
+      case 'flipStart':
+        run.events.push(e);
         break;
       case 'flipDone':
         addTrick(s, e.trick, cfg);

@@ -151,6 +151,23 @@ export const CONFIG = {
     flipChance: 0.6, // attract mode: chance to flip instead of a plain ollie
   },
 
+  audio: {
+    master: 0.8,
+    music: 0.32,
+    sfx: 0.8,
+    muteRamp: 0.05, // s: mute fades the master over this
+    musicBpm: [120, 132, 144, 156], // tempo steps up with each tier
+    lookahead: 0.1, // s of music scheduled ahead on the audio clock
+    schedulerInterval: 25, // ms between scheduler runs
+    grindLevel: 0.07,
+  },
+
+  haptics: {
+    bail: 30, // ms buzz
+    bigCombo: [40, 60, 40], // double pulse for combos over bigComboPoints
+    bigComboPoints: 1000,
+  },
+
   ui: {
     blinkPeriod: 0.5, // s per on/off phase of blinking prompts
     rollFrameTime: 0.12, // s per rolling animation frame

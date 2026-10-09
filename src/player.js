@@ -10,6 +10,7 @@
 //
 // Things that happen are pushed to p.events for run.js to score:
 //   { type: 'launch', kind }        left a surface: 'ollie' (incl. pop off a rail) or 'kicker'
+//   { type: 'flipStart', trick }    a flip started spinning
 //   { type: 'flipDone', trick }     a flip finished spinning
 //   { type: 'land', result, surface }   'clean' | 'sketchy' | 'bail', on 'ground' | 'rail'
 //   { type: 'grindStart' } { type: 'grindTick' } { type: 'grindEnd' }
@@ -81,6 +82,7 @@ function startFlip(p, trick, cfg, elapsed) {
   p.flip = trick;
   p.flipDur = cfg.tricks[trick].duration;
   p.flipTime = elapsed;
+  p.events.push({ type: 'flipStart', trick });
 }
 
 export function pressOllie(p, cfg) {

@@ -14,7 +14,8 @@ import {
   drawGameOverScreen,
   drawCombo,
   hitPauseButton,
-  drawPausedScreen,
+  drawPauseMenu,
+  pauseMenuItemAt,
   drawRotateScreen,
   drawPrompt,
   addPopup,
@@ -24,7 +25,23 @@ import {
 } from './ui.js';
 import { createDebug, drawHitboxes, reportError } from './debug.js';
 import { isPortrait, isTouchDevice, enterFullscreenLandscape } from './device.js';
-import { unlockAudio } from './audio.js';
+import {
+  configureAudio,
+  unlockAudio,
+  playSfx,
+  startMusic,
+  stopMusic,
+  restartMusic,
+  setMusicTier,
+  grindLoop,
+  setMuted,
+  isMuted,
+  suspendAudio,
+  resumeAudio,
+  audioState,
+  vibrate,
+  SOUNDS,
+} from './audio.js';
 import { createTuningPanel } from './tuning.js';
 import { SEGMENTS } from './segments.js';
 import { TUTORIAL, tutorialPrompt } from './tutorial.js';
@@ -50,6 +67,7 @@ const renderer = createRenderer(CONFIG, document.getElementById('screen'), docum
 const sprites = buildSprites(CONFIG);
 const input = createInput(CONFIG);
 const debug = createDebug(CONFIG, params.get('debug') === '1');
+configureAudio(CONFIG, { muted: getSetting('muted', false) });
 const bot = createBot(CONFIG, { flips: true });
 
 // Debug toggles (tuning panel and URL).
@@ -72,6 +90,7 @@ const game = {
   run: createRun(CONFIG, CONFIG.attract.seed, { spawn: false }),
   tutorial: null, // { snap, cp, retry } while the tutorial runs
   best: getSetting('best', 0), // hi-score (top-10 table comes in M6)
+  menuSel: 0, // pause menu selection
 };
 
 function setState(s) {
@@ -93,30 +112,93 @@ function setRun(run) {
   clearPopups();
 }
 
-function startRun() {
-  const tutorial = params.get('tutorial') === '1' || (!replay && !getSetting('tutorialDone', false));
+function startRun(forceTutorial = false) {
+  const tutorial = forceTutorial || params.get('tutorial') === '1' || (!replay && !getSetting('tutorialDone', false));
   const run = createRun(CONFIG, urlSeed ?? randomSeed(), { spawn: true, script: tutorial ? TUTORIAL : null });
   if (replay) run.world.nextSpawnX = CONFIG.view.maxWidth + 40; // straight to the action, like the soak test
   if (urlSpeed) run.world.speedOverride = urlSpeed;
   setRun(run);
   game.tutorial = tutorial ? { snap: cloneRun(run, CONFIG), cp: 0, retry: 0 } : null;
   setState('play');
+  playSfx('select');
+  restartMusic();
+  startMusic();
 }
 
 function gameOver() {
+  stopMusic();
+  grindLoop(false);
   if (game.run.score > game.best) {
     game.best = game.run.score;
     setSetting('best', game.best);
+    playSfx('fanfare');
+  } else {
+    playSfx('gameOver');
   }
   setState('dead');
 }
 
+// Music and the grind loop stop on pause, bail and game over.
 function pause() {
-  if (game.state === 'play') setState('paused');
+  if (game.state !== 'play') return;
+  setState('paused');
+  game.menuSel = 0;
+  stopMusic();
+  grindLoop(false);
 }
 
 function resume() {
-  if (game.state === 'paused') setState('play');
+  if (game.state !== 'paused') return;
+  setState('play');
+  if (!game.run.down) startMusic();
+  if (game.run.player.grinding) grindLoop(true);
+}
+
+function toggleMute() {
+  setMuted(!isMuted());
+  setSetting('muted', isMuted());
+}
+
+function quitToTitle() {
+  game.tutorial = null;
+  setRun(createRun(CONFIG, CONFIG.attract.seed, { spawn: false }));
+  setState('start');
+}
+
+// Pause menu (CRT on/off joins it in M7).
+const MENU = [
+  { label: () => 'RESUME', run: () => resume() },
+  { label: () => (isMuted() ? 'SOUND: OFF' : 'SOUND: ON'), run: () => toggleMute() },
+  {
+    label: () => 'REPLAY TUTORIAL',
+    run: () => startRun(true),
+  },
+  { label: () => 'QUIT', run: () => quitToTitle() },
+];
+
+function menuItemUnderPointer() {
+  const p = renderer.toInternal(input.pointer.x, input.pointer.y);
+  return pauseMenuItemAt(p.x, p.y, renderer.width, MENU.length);
+}
+
+function handleMenuAction(a) {
+  if (a === 'flipU' || a === 'flipD') {
+    game.menuSel = (game.menuSel + (a === 'flipU' ? MENU.length - 1 : 1)) % MENU.length;
+    playSfx('blip');
+  } else if (a === 'press') {
+    if (input.lastSource === 'pointer') {
+      const i = menuItemUnderPointer();
+      if (i < 0) return;
+      if (i !== game.menuSel) playSfx('blip');
+      game.menuSel = i;
+    }
+    game.armed = true;
+  } else if (a === 'release' && game.armed) {
+    game.armed = false;
+    if (input.lastSource === 'pointer' && menuItemUnderPointer() !== game.menuSel) return;
+    playSfx('select');
+    MENU[game.menuSel].run();
+  }
 }
 
 // Tutorial: save a checkpoint as each one is passed; a bail rewinds to the
@@ -129,6 +211,7 @@ function updateTutorial(dt) {
     if (tut.retry >= CONFIG.tutorial.retryDelay) {
       setRun(cloneRun(tut.snap, CONFIG));
       addPopup('TRY AGAIN', COL.cream);
+      startMusic();
       tut.retry = 0;
     }
     return;
@@ -185,18 +268,52 @@ const tuning = createTuningPanel(CONFIG, {
 });
 tuning.setButtonVisible(debug.enabled);
 
+// Sounds, haptics and popups for what happened this tick. Trick names show in
+// the combo chain (drawCombo); popups are for results.
 function handleRunEvents(run) {
   const evs = run.events;
   for (let i = 0; i < evs.length; i++) {
     const e = evs[i];
-    // Trick names show in the combo chain (drawCombo); popups are for results.
-    if (e.type === 'bail' && !run.over) {
-      addPopup('BAIL!', COL.rose);
-    } else if (e.type === 'extraBoard') {
-      addPopup('EXTRA BOARD!', COL.mint);
-    } else if (e.type === 'land' && e.tricks > 0) {
-      if (e.result === 'sketchy') addPopup('SKETCHY! +' + e.points, COL.orange);
-      else addPopup('+' + e.points, COL.mint);
+    switch (e.type) {
+      case 'launch':
+        playSfx(e.kind === 'kicker' ? 'kicker' : 'ollie');
+        break;
+      case 'flipStart':
+        playSfx('flip');
+        break;
+      case 'grind':
+        playSfx('clank');
+        if (game.state === 'play') grindLoop(true);
+        break;
+      case 'grindEnd':
+        grindLoop(false);
+        break;
+      case 'token':
+        playSfx('token');
+        break;
+      case 'land':
+        playSfx(e.result === 'sketchy' ? 'sketchy' : 'land');
+        if (e.tricks > 0) {
+          playSfx('combo', { points: e.points });
+          if (e.result === 'sketchy') addPopup('SKETCHY! +' + e.points, COL.orange);
+          else addPopup('+' + e.points, COL.mint);
+          if (e.points > CONFIG.haptics.bigComboPoints) vibrate(CONFIG.haptics.bigCombo);
+        }
+        break;
+      case 'bail':
+        playSfx('bail');
+        vibrate(CONFIG.haptics.bail);
+        stopMusic();
+        grindLoop(false);
+        if (!run.over) addPopup('BAIL!', COL.rose);
+        break;
+      case 'respawn':
+        if (game.state === 'play') startMusic();
+        break;
+      case 'extraBoard':
+        playSfx('extraBoard');
+        addPopup('EXTRA BOARD!', COL.mint);
+        break;
     }
   }
   evs.length = 0;
@@ -212,6 +329,10 @@ function handleAction(a) {
     if (debug.enabled) tuning.toggle();
     return;
   }
+  if (a === 'mute') {
+    toggleMute();
+    return;
+  }
   if (a === 'pause') {
     if (game.state === 'play') pause();
     else if (game.state === 'paused' && !game.portrait) resume();
@@ -224,16 +345,19 @@ function handleAction(a) {
     else if (a.startsWith('flip')) runFlip(game.run, a, CONFIG);
     return;
   }
+  if (game.state === 'paused') {
+    handleMenuAction(a);
+    return;
+  }
 
-  // Menu states confirm on release, after a press that happened inside this
-  // state. Release is when touch grants fullscreen permission, and a finger
-  // already down when the state changed can't skip the screen. Flips do nothing.
+  // Title and game over confirm on release, after a press that happened inside
+  // this state. Release is when touch grants fullscreen permission, and a
+  // finger already down when the state changed can't skip the screen.
   if (a === 'press') {
     const lockout = game.state === 'dead' ? CONFIG.bail.retryDelay : 0;
     if (game.stateTime >= lockout) game.armed = true;
   } else if (a === 'release' && game.armed) {
-    if (game.state === 'paused') resume();
-    else startRun();
+    startRun();
   }
 }
 
@@ -259,6 +383,7 @@ function tick(dt) {
         if (a) handleAction(a);
       }
       stepRun(game.run, dt, CONFIG);
+      setMusicTier(game.run.world.tier);
       updatePopups(dt, CONFIG);
       if (game.tutorial) updateTutorial(dt);
       else if (game.run.over && game.run.downTime >= CONFIG.bail.gameOverDelay) gameOver();
@@ -294,7 +419,7 @@ function render() {
         const canRetry = game.stateTime >= CONFIG.bail.retryDelay;
         drawGameOverScreen(g, W, H, game.stateTime, run, canRetry, game.touch, sprites, CONFIG);
       } else if (game.state === 'paused') {
-        drawPausedScreen(g, W, H, game.stateTime, game.touch, sprites, CONFIG);
+        drawPauseMenu(g, W, H, MENU.map((m) => m.label()), game.menuSel, sprites);
       }
     }
   }
@@ -324,6 +449,7 @@ function debugLines(d) {
     `STATE ${game.state.toUpperCase()}${game.tutorial ? ' TUTORIAL' : ''}`,
     `BUILD ${BUILD}`,
   ];
+  lines.push(`AUDIO ${audioState().toUpperCase()}${isMuted() ? ' MUTED' : ''}`);
   const flags = [dbg.autopilot && 'BOT', dbg.invincible && 'INVINCIBLE', dbg.slowmo && 'SLOW-MO'].filter(Boolean);
   if (flags.length) lines.push(flags.join(' '));
   const tuned = tuning.changedCount();
@@ -395,7 +521,12 @@ window.addEventListener('touchend', unlockAudio, { passive: true });
 
 // Auto-pause when the player leaves (resume countdown comes in M6).
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) pause();
+  if (document.hidden) {
+    pause();
+    suspendAudio();
+  } else {
+    resumeAudio();
+  }
 });
 window.addEventListener('blur', pause);
 window.addEventListener('pagehide', pause);
@@ -407,6 +538,7 @@ if (debug.enabled) {
     config: CONFIG,
     tuning,
     dbg,
+    audio: { state: audioState, sounds: SOUNDS },
     step(n = 1) {
       checkPortrait();
       for (let i = 0; i < n; i++) tick(STEP);

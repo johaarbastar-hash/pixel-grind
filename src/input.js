@@ -7,6 +7,7 @@
 //   'pause'   P or Esc
 //   'debug'   backtick
 //   'tune'    T (tuning panel, debug mode only)
+//   'mute'    M
 //
 // Swipes: touching the screen pops; the direction you swipe picks the flip.
 // A swipe counts the moment the finger has moved swipeDistance CSS px within
@@ -35,6 +36,10 @@ export function createInput(cfg) {
     // (clientX, clientY) -> action for an on-screen button there, or null.
     // Touches that start on a button never ollie or swipe.
     uiHitTest: null,
+    // Where the latest press / release happened (page px), and whether the
+    // latest press came from a pointer or the keyboard. Used by menus.
+    pointer: { x: 0, y: 0 },
+    lastSource: 'key',
     drain() {
       const out = queue;
       queue = spare;
@@ -75,6 +80,9 @@ export function createInput(cfg) {
         return;
       }
       touches.set(e.pointerId, { x: e.clientX, y: e.clientY, t: e.timeStamp, done: false });
+      api.pointer.x = e.clientX;
+      api.pointer.y = e.clientY;
+      api.lastSource = 'pointer';
       push('press');
       // Mouse presses grant user activation; touch only does on release.
       if (e.pointerType === 'mouse') gesture(e);
@@ -95,6 +103,8 @@ export function createInput(cfg) {
       touches.delete(e.pointerId);
       if (!tr.done) checkSwipe(tr, e);
       e.preventDefault();
+      api.pointer.x = e.clientX;
+      api.pointer.y = e.clientY;
       if (e.pointerType !== 'mouse') gesture(e);
       push('release');
     },
@@ -112,6 +122,7 @@ export function createInput(cfg) {
       case 'Enter':
         e.preventDefault();
         if (!e.repeat) {
+          api.lastSource = 'key';
           push('press');
           gesture(e);
         }
@@ -142,6 +153,12 @@ export function createInput(cfg) {
         break;
       case 'KeyT':
         if (!e.repeat) push('tune');
+        break;
+      case 'KeyM':
+        if (!e.repeat) {
+          push('mute');
+          gesture(e);
+        }
         break;
     }
   });
