@@ -876,6 +876,28 @@ if (debug.enabled) {
   };
 }
 
+// Offline play: the service worker is generated at build time (vite.config.js),
+// so it only exists in production builds.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {
+      // No offline mode (e.g. private browsing): the game still works online.
+    });
+  });
+}
+
+// Android: Chrome offers installing the app; keep the prompt for the title
+// screen's INSTALL button instead of the browser's own banner.
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  game.installPrompt = e;
+  refreshScores();
+});
+window.addEventListener('appinstalled', () => {
+  game.installPrompt = null;
+  refreshScores();
+});
+
 // Start: boot text once per session, otherwise straight to the title.
 refreshScores();
 if (bootedThisSession()) toTitle();

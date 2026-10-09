@@ -8,7 +8,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "soak": "node scripts/soak.mjs"
+    "soak": "node scripts/soak.mjs",
+    "icons": "node scripts/make-icons.mjs"
   },
   "devDependencies": {
     "vite": "^8.3.4"
