@@ -214,6 +214,11 @@ function buildSkater() {
       sprite(16, 24, body, boardFlat(COL.cream, COL.steel)),
       sprite(16, 24, body, boardFlat(COL.steel, COL.cream)),
     ],
+    // Trucks on the rail with sparks (particles come in M7).
+    grind: [
+      sprite(16, 24, body, [...BOARD.flat.slice(0, 4), [COL.gold, 3, 23, 1, 1], [COL.white, 12, 23, 1, 1]]),
+      sprite(16, 24, body, [...BOARD.flat.slice(0, 4), [COL.white, 4, 23, 1, 1], [COL.gold, 11, 23, 1, 1]]),
+    ],
     air: sprite(16, 24, [...HEAD, ...TORSO, ...ARMS_UP, ...LEGS], BOARD.flat),
     flips,
     // Lying on the ground after a bail (24 x 10, bottom row on the ground).
@@ -242,7 +247,86 @@ function buildSkater() {
   };
 }
 
-// --- Obstacles -------------------------------------------------------------
+// --- Obstacles (city skins) ------------------------------------------------
+// One skin per gameplay type: cone = low block, trash can = tall block,
+// concrete ledge = ledge, handrail = rail, open hole = gap, wooden ramp = kicker.
+
+function buildCan() {
+  const c = makeCanvas(12, 16);
+  fillRects(c.getContext('2d'), [
+    [COL.ink, 4, 0, 4, 1], // handle
+    [COL.mint, 0, 1, 12, 1], // lid
+    [COL.teal, 0, 2, 12, 1],
+    [COL.teal, 1, 3, 10, 12], // body
+    [COL.mint, 3, 4, 1, 10], // ribs
+    [COL.mint, 6, 4, 1, 10],
+    [COL.slate, 9, 3, 2, 12], // shade
+    [COL.ink, 1, 15, 10, 1], // base
+  ]);
+  return c;
+}
+
+function buildKicker(cfg) {
+  const { w, h } = cfg.obstacles.kicker;
+  const c = makeCanvas(w, h);
+  const g = c.getContext('2d');
+  for (let x = 0; x < w; x++) {
+    const colH = Math.ceil((h * (x + 1)) / w);
+    g.fillStyle = COL.brown;
+    g.fillRect(x, h - colH, 1, colH);
+    g.fillStyle = COL.gold; // riding surface
+    g.fillRect(x, h - colH, 1, 1);
+  }
+  fillRects(g, [
+    [COL.steel, w - 3, 0, 3, 1], // metal lip
+    [COL.ink, w - 1, 1, 1, h - 1], // back
+  ]);
+  return c;
+}
+
+function buildLedge(w, h) {
+  const c = makeCanvas(w, h);
+  const g = c.getContext('2d');
+  fillRects(g, [
+    [COL.steel, 0, 0, w, h], // concrete
+    [COL.cream, 0, 0, w, 1], // grindable edge
+    [COL.slate, 0, h - 2, w, 2], // shadowed base
+    [COL.slate, w - 1, 1, 1, h - 1],
+  ]);
+  g.fillStyle = COL.slate; // slab seams
+  for (let x = 16; x < w - 4; x += 16) g.fillRect(x, 2, 1, h - 4);
+  return c;
+}
+
+function buildRail(w, h) {
+  const c = makeCanvas(w, h);
+  const g = c.getContext('2d');
+  const posts = [2, w - 4];
+  for (let x = 40; x < w - 20; x += 40) posts.push(x);
+  for (const x of posts) {
+    fillRects(g, [
+      [COL.steel, x, 2, 2, h - 3],
+      [COL.slate, x + 1, 2, 1, h - 3],
+      [COL.slate, x - 1, h - 1, 4, 1], // foot
+    ]);
+  }
+  fillRects(g, [
+    [COL.cream, 0, 0, w, 1], // bar top: the grind surface
+    [COL.steel, 0, 1, w, 1],
+  ]);
+  return c;
+}
+
+// Open hole in the pavement, drawn from the riding surface down.
+function buildGap(w) {
+  const c = makeCanvas(w, 10);
+  fillRects(c.getContext('2d'), [
+    [COL.ink, 0, 0, w, 10],
+    [COL.navy, w - 2, 1, 2, 9], // far wall catches some light
+    [COL.navy, 0, 9, w, 1],
+  ]);
+  return c;
+}
 
 function buildCone() {
   const c = makeCanvas(8, 8);
@@ -366,9 +450,28 @@ function buildChecker(w, h) {
 
 export function buildSprites(cfg) {
   const groundY = cfg.world.groundY;
+  const fixed = {
+    lowBlock: buildCone(),
+    tallBlock: buildCan(),
+    kicker: buildKicker(cfg),
+  };
+  // Ledges, rails and gaps vary in width: built on first use, then cached.
+  const cache = new Map();
+  function obstacle(ob) {
+    if (fixed[ob.type]) return fixed[ob.type];
+    const key = ob.type + ':' + ob.w;
+    let c = cache.get(key);
+    if (!c) {
+      if (ob.type === 'ledge') c = buildLedge(ob.w, ob.h);
+      else if (ob.type === 'rail') c = buildRail(ob.w, ob.h);
+      else c = buildGap(ob.w);
+      cache.set(key, c);
+    }
+    return c;
+  }
   return {
     skater: buildSkater(),
-    lowBlock: buildCone(),
+    obstacle,
     sky: buildSky(cfg.view.maxWidth, groundY),
     skyline: buildSkyline(512, 80),
     street: buildStreet(),

@@ -9,10 +9,13 @@ export const FLIP_FOR_ACTION = {
   flipU: 'treflip',
 };
 
+export const FLIP_ACTIONS = Object.keys(FLIP_FOR_ACTION);
+
 export const TRICK_NAMES = {
   ollie: 'OLLIE',
   kickflip: 'KICKFLIP',
   heelflip: 'HEELFLIP',
   shoveit: 'POP SHOVE-IT',
   treflip: '360 FLIP',
+  grind: 'GRIND',
 };

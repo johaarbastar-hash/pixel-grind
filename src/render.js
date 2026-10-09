@@ -119,7 +119,7 @@ export function drawWorld(g, W, run, sprites, cfg) {
     const sx = ob.x - camX;
     if (sx >= W) break;
     if (sx + ob.w <= 0) continue;
-    g.drawImage(sprites[ob.type], sx, ob.y);
+    g.drawImage(sprites.obstacle(ob), sx, ob.y);
   }
 
   drawSkater(g, run.player, sprites.skater, cfg);
@@ -131,7 +131,7 @@ function drawSkater(g, p, sk, cfg) {
   const groundY = cfg.world.groundY;
 
   if (p.bailed) {
-    if (p.onGround) {
+    if (p.onGround && y === groundY) {
       const slide = Math.round(Math.min(cfg.bail.boardSlideMax, p.bailTime * cfg.bail.boardSlideSpeed));
       g.drawImage(sk.boardFlipped, x + cfg.skater.spriteW + slide, groundY - sk.boardFlipped.height);
     }
@@ -139,7 +139,7 @@ function drawSkater(g, p, sk, cfg) {
     return;
   }
 
-  if (!p.onGround) {
+  if (!p.onGround && !p.grinding) {
     // Shadow on the ground shrinks as the skater rises.
     const w = Math.max(4, 12 - Math.floor((groundY - y) / 4));
     g.fillStyle = COL.ink;
@@ -155,5 +155,5 @@ function drawSkater(g, p, sk, cfg) {
   }
 
   const frame = Math.floor(p.anim / cfg.ui.rollFrameTime) & 1;
-  g.drawImage(sk.ride[frame], x, y - cfg.skater.spriteH);
+  g.drawImage((p.grinding ? sk.grind : sk.ride)[frame], x, y - cfg.skater.spriteH);
 }

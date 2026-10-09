@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "soak": "node scripts/soak.mjs"
   },
   "devDependencies": {
     "vite": "^8.3.4"

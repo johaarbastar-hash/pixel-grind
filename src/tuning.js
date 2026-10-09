@@ -13,6 +13,7 @@ const SPECS = [
   ['world', [
     ['startSpeed', 40, 300, 5],
     ['maxSpeed', 60, 400, 5],
+    ['speedRampTime', 30, 600, 10],
   ]],
   ['timing', [
     ['jumpBuffer', 0, 0.3, 0.01],
@@ -28,7 +29,13 @@ const SPECS = [
   ['tricks.shoveit', [['duration', 0.1, 0.8, 0.01], ['points', 0, 1000, 5]]],
   ['tricks.treflip', [['duration', 0.1, 0.8, 0.01], ['points', 0, 1000, 5]]],
   ['tricks.ollie', [['points', 0, 100, 1]]],
+  ['tricks.grind', [['points', 0, 50, 1]]],
   ['landing', [['sketchyBank', 0, 1, 0.05]]],
+  ['grind', [
+    ['tickTime', 0.05, 0.5, 0.01],
+    ['landTolerance', 0, 8, 1],
+  ]],
+  ['gap', [['fallDepth', 0, 16, 1]]],
   ['skater', [
     ['hitboxW', 4, 16, 1],
     ['hitboxH', 8, 24, 1],
@@ -37,9 +44,7 @@ const SPECS = [
   ['spawn', [
     ['openingClear', 0, 10, 0.5],
     ['gapPadding', 0, 1.5, 0.05],
-    ['randomExtra', 0, 4, 0.1],
-    ['pairChance', 0, 1, 0.05],
-    ['pairGap', 0, 16, 1],
+    ['randomExtra', 0, 3, 0.1],
   ]],
   ['score', [['pxPerPoint', 1, 50, 1]]],
   ['bail', [
@@ -47,6 +52,56 @@ const SPECS = [
     ['retryDelay', 0, 2, 0.05],
   ]],
 ];
+
+// Debug toggles shown above the sliders. Each control:
+//   { type: 'check', label, get, set }
+//   { type: 'select', label, options: [[value, text]], get, set }
+//   { type: 'button', label, onClick }
+function buildControls(controls, panel) {
+  if (!controls.length) return;
+  const h = document.createElement('div');
+  h.className = 'tune-section';
+  h.textContent = 'debug';
+  panel.appendChild(h);
+  const refreshers = [];
+  for (const c of controls) {
+    const row = document.createElement('label');
+    row.className = 'tune-row tune-control';
+    const name = document.createElement('span');
+    name.textContent = c.label;
+    row.appendChild(name);
+    if (c.type === 'check') {
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.addEventListener('change', () => c.set(box.checked));
+      refreshers.push(() => (box.checked = !!c.get()));
+      row.appendChild(box);
+    } else if (c.type === 'select') {
+      const sel = document.createElement('select');
+      for (const [value, text] of c.options) {
+        const o = document.createElement('option');
+        o.value = String(value);
+        o.textContent = text;
+        sel.appendChild(o);
+      }
+      sel.addEventListener('change', () => c.set(sel.value));
+      refreshers.push(() => (sel.value = String(c.get())));
+      row.appendChild(sel);
+    } else if (c.type === 'button') {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = c.label;
+      b.addEventListener('click', () => {
+        b.blur();
+        c.onClick();
+      });
+      name.textContent = '';
+      row.appendChild(b);
+    }
+    panel.appendChild(row);
+  }
+  return () => refreshers.forEach((f) => f());
+}
 
 function resolve(obj, path) {
   return path.split('.').reduce((o, k) => o[k], obj);
@@ -58,12 +113,13 @@ function decimals(step) {
   return i < 0 ? 0 : s.length - i - 1;
 }
 
-export function createTuningPanel(cfg, { onOpen } = {}) {
+export function createTuningPanel(cfg, { onOpen, controls = [] } = {}) {
   const defaults = JSON.parse(JSON.stringify(cfg));
   const rows = []; // { section, key, input, value, row, step }
   let panel = null;
   let status = null;
   let fallback = null;
+  let refreshControls = () => {};
 
   const button = document.createElement('button');
   button.id = 'tune-btn';
@@ -117,6 +173,7 @@ export function createTuningPanel(cfg, { onOpen } = {}) {
     status.className = 'tune-status';
     head.appendChild(status);
     panel.appendChild(head);
+    refreshControls = buildControls(controls, panel) || (() => {});
 
     for (const [section, keys] of SPECS) {
       const h = document.createElement('div');
@@ -200,6 +257,7 @@ export function createTuningPanel(cfg, { onOpen } = {}) {
     open() {
       if (!panel) build();
       for (const r of rows) refreshRow(r);
+      refreshControls();
       status.textContent = '';
       fallback.hidden = true;
       panel.hidden = false;

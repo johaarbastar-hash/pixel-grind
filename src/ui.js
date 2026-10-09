@@ -29,10 +29,20 @@ export function drawStartScreen(g, W, H, t, touch, build, cfg) {
   drawText(g, 'BUILD ' + build, W - 4, H - 10, COL.steel, { align: 'right' });
 }
 
+// By bail reason: obstacle type (city skin names), 'gap' or 'flip'.
 const BAIL_REASON = {
-  obstacle: 'HIT AN OBSTACLE',
+  lowBlock: 'HIT A CONE',
+  tallBlock: 'HIT A TRASH CAN',
+  ledge: 'HIT A LEDGE',
+  rail: 'HIT A RAIL',
+  gap: 'FELL IN A HOLE',
   flip: 'LANDED MID-FLIP',
 };
+
+// Tutorial prompt across the top of the screen.
+export function drawPrompt(g, W, text) {
+  drawText(g, text, W >> 1, 24, COL.gold, { align: 'center', shadow: COL.ink });
+}
 
 export function drawDeadScreen(g, W, H, t, score, reason, canRetry, touch, sprites, cfg) {
   const cx = W >> 1;

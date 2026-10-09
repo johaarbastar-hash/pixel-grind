@@ -1,57 +1,160 @@
 // One run of the game: world + skater + collisions + score. No DOM access, so
-// the same code drives the real game, the title-screen demo and headless tests.
+// the same code drives the real game, the title-screen demo, the bot's
+// lookahead and headless soak tests.
 // UI-facing happenings are pushed to run.events (drained by main.js):
-//   { type: 'trick', trick }                        a flip landed in the air
-//   { type: 'land', result, points, flips }         combo banked (clean / sketchy)
+//   { type: 'trick', trick }                       a flip landed in the air
+//   { type: 'grind' }                              locked into a grind
+//   { type: 'land', result, points, tricks }       combo banked on the ground
 
 import { createRng } from './rng.js';
-import { createWorld, updateWorld, stopWorld } from './world.js';
-import { createPlayer, updatePlayer, pressOllie, pressFlip, bailPlayer, playerHitbox } from './player.js';
+import { createWorld, cloneWorld, updateWorld, stopWorld } from './world.js';
+import {
+  createPlayer,
+  clonePlayer,
+  updatePlayer,
+  pressOllie,
+  pressFlip,
+  bailPlayer,
+  playerHitbox,
+} from './player.js';
 import { overlaps } from './collision.js';
-import { createScore, startCombo, addTrick, bankCombo, loseCombo } from './score.js';
+import { createScore, startCombo, addTrick, addPoints, bankCombo, loseCombo } from './score.js';
 import { FLIP_FOR_ACTION } from './tricks.js';
 
 export function createRun(cfg, seed, opts = {}) {
-  return {
+  const run = {
     seed,
+    ticks: 0,
     time: 0,
     score: 0,
     over: false,
-    bailReason: null, // 'obstacle' | 'flip'
+    invincible: false,
+    bailReason: null, // 'flip' | 'gap' | obstacle type
+    bailSeg: null, // segment id of what caused the bail
     world: createWorld(cfg, createRng(seed), opts),
     player: createPlayer(cfg),
     tricks: createScore(),
     hitbox: { x: 0, y: 0, w: 0, h: 0 },
     events: [],
+    env: null,
+  };
+  run.env = makeEnv(run, cfg);
+  return run;
+}
+
+export function cloneRun(run, cfg) {
+  const c = {
+    ...run,
+    world: cloneWorld(run.world),
+    player: clonePlayer(run.player),
+    tricks: { ...run.tricks },
+    hitbox: { ...run.hitbox },
+    events: [],
+  };
+  c.env = makeEnv(c, cfg);
+  return c;
+}
+
+// Board contact points in world x: the wheels and the centre.
+function boardSpan(run, cfg) {
+  const left = run.world.distance + cfg.world.skaterX + (cfg.skater.spriteW - cfg.skater.hitboxW) / 2;
+  return { left, right: left + cfg.skater.hitboxW, centre: left + cfg.skater.hitboxW / 2 };
+}
+
+// The world as the skater sees it (see player.js).
+function makeEnv(run, cfg) {
+  return {
+    floor() {
+      const b = boardSpan(run, cfg);
+      const groundY = cfg.world.groundY;
+      for (const ob of run.world.obstacles) {
+        if (ob.x > b.right) break;
+        // Over a gap only when both wheels are over the hole.
+        if (ob.type === 'gap' && !run.invincible && ob.x <= b.left && b.right <= ob.x + ob.w) return null;
+        if (ob.type === 'kicker' && b.centre >= ob.x && b.centre <= ob.x + ob.w) {
+          return groundY - (ob.h * (b.centre - ob.x)) / ob.w;
+        }
+      }
+      return groundY;
+    },
+    ramp() {
+      const b = boardSpan(run, cfg);
+      for (const ob of run.world.obstacles) {
+        if (ob.x > b.centre) break;
+        if (ob.type === 'kicker' && b.centre <= ob.x + ob.w) return ob;
+      }
+      return null;
+    },
+    grindTarget(prevY, y) {
+      const b = boardSpan(run, cfg);
+      const tol = cfg.grind.landTolerance;
+      for (const ob of run.world.obstacles) {
+        if (ob.x > b.right) break;
+        // Wheels over the top, centre not yet past the far end (that's rolling off).
+        if (!ob.grind || b.right <= ob.x || b.centre > ob.x + ob.w) continue;
+        if (prevY <= ob.y + tol && y >= ob.y) return ob;
+      }
+      return null;
+    },
+    // Grind to the end: off once the board's centre passes the far end.
+    stillOn(ob) {
+      return boardSpan(run, cfg).centre <= ob.x + ob.w;
+    },
   };
 }
 
-function bail(run, reason, cfg) {
+function bail(run, reason, seg, cfg) {
+  if (run.invincible) return;
   run.over = true;
   run.bailReason = reason;
+  run.bailSeg = seg;
   bailPlayer(run.player);
   stopWorld(run.world, cfg);
   loseCombo(run.tricks);
 }
 
+function gapUnder(run, cfg) {
+  const c = boardSpan(run, cfg).centre;
+  for (const ob of run.world.obstacles) if (ob.type === 'gap' && c >= ob.x && c <= ob.x + ob.w) return ob;
+  return null;
+}
+
 function handlePlayerEvents(run, cfg) {
   const evs = run.player.events;
-  for (let i = 0; i < evs.length; i++) {
+  const s = run.tricks;
+  for (let i = 0; i < evs.length && !run.over; i++) {
     const e = evs[i];
-    if (e.type === 'launch') {
-      startCombo(run.tricks);
-      addTrick(run.tricks, 'ollie', cfg);
-    } else if (e.type === 'flipDone') {
-      addTrick(run.tricks, e.trick, cfg);
-      run.events.push({ type: 'trick', trick: e.trick });
-    } else if (e.type === 'land') {
-      if (e.result === 'bail') {
-        bail(run, 'flip', cfg);
-      } else {
-        const flips = run.tricks.comboFlips;
-        const fraction = e.result === 'sketchy' ? cfg.landing.sketchyBank : 1;
-        const points = bankCombo(run.tricks, fraction);
-        run.events.push({ type: 'land', result: e.result, points, flips });
+    switch (e.type) {
+      case 'launch':
+        if (!s.live) startCombo(s);
+        if (e.kind === 'ollie') addTrick(s, 'ollie', cfg);
+        break;
+      case 'flipDone':
+        addTrick(s, e.trick, cfg);
+        run.events.push({ type: 'trick', trick: e.trick });
+        break;
+      case 'grindStart':
+        addTrick(s, 'grind', cfg);
+        run.events.push({ type: 'grind' });
+        break;
+      case 'grindTick':
+        addPoints(s, cfg.tricks.grind.points);
+        break;
+      case 'land':
+        if (e.result === 'bail') {
+          bail(run, 'flip', null, cfg);
+        } else if (e.surface === 'ground' && s.live) {
+          // A rail landing keeps the combo going; the ground banks it.
+          const tricks = s.comboTricks;
+          const fraction = e.result === 'sketchy' ? cfg.landing.sketchyBank : 1;
+          const points = bankCombo(s, fraction);
+          run.events.push({ type: 'land', result: e.result, points, tricks });
+        }
+        break;
+      case 'fell': {
+        const gap = gapUnder(run, cfg);
+        bail(run, 'gap', gap && gap.seg, cfg);
+        break;
       }
     }
   }
@@ -72,21 +175,29 @@ export function runFlip(run, action, cfg) {
 }
 
 export function stepRun(run, dt, cfg) {
+  run.ticks++;
   run.time += dt;
-  updatePlayer(run.player, dt, cfg);
-  if (!run.over) handlePlayerEvents(run, cfg);
-  else run.player.events.length = 0;
   updateWorld(run.world, dt, cfg);
+  updatePlayer(run.player, dt, cfg, run.env);
+  if (run.over) {
+    run.player.events.length = 0;
+    return;
+  }
+  handlePlayerEvents(run, cfg);
   if (run.over) return;
 
-  const hb = playerHitbox(run.player, run.world.distance, cfg, run.hitbox);
+  // Side hits: anything solid the skater overlaps, except the rail being ground
+  // (or just dropped off).
+  const p = run.player;
+  const hb = playerHitbox(p, run.world.distance, cfg, run.hitbox);
   const list = run.world.obstacles;
   for (let i = 0; i < list.length; i++) {
     const ob = list[i];
     if (ob.x > hb.x + hb.w) break; // sorted by x: nothing further can touch
+    if (!ob.solid || ob === p.grinding || ob === p.lastGrind) continue;
     if (overlaps(hb, ob.hit)) {
-      bail(run, 'obstacle', cfg);
-      return;
+      bail(run, ob.type, ob.seg, cfg);
+      if (run.over) return;
     }
   }
   run.score = Math.floor(run.world.distance / cfg.score.pxPerPoint) + run.tricks.banked;

@@ -98,6 +98,6 @@ export function drawHitboxes(g, W, run) {
   for (const ob of run.world.obstacles) {
     const sx = ob.hit.x - camX;
     if (sx >= W) break;
-    outline(g, sx, ob.hit.y, ob.hit.w, ob.hit.h, COL.rose);
+    if (ob.solid) outline(g, sx, ob.hit.y, ob.hit.w, ob.hit.h, ob.grind ? COL.gold : COL.rose);
   }
 }

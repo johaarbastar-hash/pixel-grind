@@ -1,5 +1,6 @@
 // Seeded random number generator (mulberry32). All gameplay randomness goes
 // through one of these so any run can be replayed exactly from its seed.
+// The state is a single number, so a generator can be cloned (bot lookahead).
 
 export function createRng(seed) {
   let s = seed >>> 0;
@@ -23,8 +24,20 @@ export function createRng(seed) {
     pick(list) {
       return list[Math.floor(rng.next() * list.length)];
     },
+    getState() {
+      return s;
+    },
+    setState(v) {
+      s = v >>> 0;
+    },
   };
   return rng;
+}
+
+export function cloneRng(r) {
+  const c = createRng(0);
+  c.setState(r.getState());
+  return c;
 }
 
 export function randomSeed() {

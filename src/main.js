@@ -7,13 +7,14 @@ import { randomSeed } from './rng.js';
 import { createInput } from './input.js';
 import { createRenderer, drawWorld } from './render.js';
 import { buildSprites, COL } from './sprites.js';
-import { createRun, runPress, runFlip, stepRun } from './run.js';
+import { createRun, cloneRun, runPress, runFlip, stepRun } from './run.js';
 import {
   drawHud,
   drawStartScreen,
   drawDeadScreen,
   drawPausedScreen,
   drawRotateScreen,
+  drawPrompt,
   addPopup,
   clearPopups,
   updatePopups,
@@ -24,19 +25,41 @@ import { isPortrait, isTouchDevice, enterFullscreenLandscape } from './device.js
 import { unlockAudio } from './audio.js';
 import { createTuningPanel } from './tuning.js';
 import { TRICK_NAMES } from './tricks.js';
+import { SEGMENTS } from './segments.js';
+import { TUTORIAL, tutorialPrompt } from './tutorial.js';
+import { createBot } from './bot.js';
+import { getSetting, setSetting } from './storage.js';
 
 /* global __BUILD_ID__ */
 const BUILD = typeof __BUILD_ID__ !== 'undefined' ? __BUILD_ID__ : 'DEV';
 const STEP = 1 / CONFIG.loop.hz;
 const REFRESH_INTERVALS = [1 / 30, 1 / 60, 1 / 90, 1 / 120, 1 / 144];
 
+// URL options: ?debug=1 overlay, ?seed=N fixed seed, ?tutorial=1 force the
+// tutorial, ?bot=1 autopilot. Soak-test replays: ?tier=T&speed=V&seg=ID
+// (fixed tier / speed, repeat one segment, skip the opening).
 const params = new URLSearchParams(location.search);
+const intParam = (name) => (params.has(name) ? Number.parseInt(params.get(name), 10) || 0 : 0);
 const urlSeed = params.has('seed') ? Number.parseInt(params.get('seed'), 10) >>> 0 : null;
+const urlSpeed = intParam('speed');
+const urlSeg = params.get('seg');
+const replay = !!(params.has('tier') || urlSpeed || urlSeg);
 
 const renderer = createRenderer(CONFIG, document.getElementById('screen'), document.getElementById('stage'));
 const sprites = buildSprites(CONFIG);
 const input = createInput(CONFIG);
 const debug = createDebug(CONFIG, params.get('debug') === '1');
+const bot = createBot(CONFIG, { flips: true });
+
+// Debug toggles (tuning panel and URL).
+const dbg = {
+  invincible: false,
+  slowmo: false,
+  autopilot: params.get('bot') === '1',
+  tier: Math.max(0, Math.min(4, intParam('tier'))), // 0 = by run time
+  repeatSeg: urlSeg,
+  segPick: SEGMENTS[0].id,
+};
 
 const game = {
   state: 'start',
@@ -46,6 +69,7 @@ const game = {
   portrait: false,
   touch: isTouchDevice(),
   run: createRun(CONFIG, CONFIG.attract.seed, { spawn: false }),
+  tutorial: null, // { snap, cp, retry } while the tutorial runs
 };
 
 function setState(s) {
@@ -54,9 +78,26 @@ function setState(s) {
   game.armed = false;
 }
 
-function startRun() {
-  game.run = createRun(CONFIG, urlSeed ?? randomSeed(), { spawn: true });
+function applyDebug(run) {
+  run.invincible = dbg.invincible;
+  run.world.tierOverride = dbg.tier;
+  if (dbg.repeatSeg) run.world.forceNext = dbg.repeatSeg;
+}
+
+function setRun(run) {
+  game.run = run;
+  applyDebug(run);
+  bot.reset();
   clearPopups();
+}
+
+function startRun() {
+  const tutorial = params.get('tutorial') === '1' || (!replay && !getSetting('tutorialDone', false));
+  const run = createRun(CONFIG, urlSeed ?? randomSeed(), { spawn: true, script: tutorial ? TUTORIAL : null });
+  if (replay) run.world.nextSpawnX = CONFIG.view.maxWidth + 40; // straight to the action, like the soak test
+  if (urlSpeed) run.world.speedOverride = urlSpeed;
+  setRun(run);
+  game.tutorial = tutorial ? { snap: cloneRun(run, CONFIG), cp: 0, retry: 0 } : null;
   setState('play');
 }
 
@@ -68,8 +109,70 @@ function resume() {
   if (game.state === 'paused') setState('play');
 }
 
+// Tutorial: save a checkpoint as each one is passed; a bail rewinds to the
+// last one instead of ending the run (no boards lost).
+function updateTutorial(dt) {
+  const tut = game.tutorial;
+  const run = game.run;
+  if (run.over) {
+    tut.retry += dt;
+    if (tut.retry >= CONFIG.tutorial.retryDelay) {
+      setRun(cloneRun(tut.snap, CONFIG));
+      addPopup('TRY AGAIN', COL.cream);
+      tut.retry = 0;
+    }
+    return;
+  }
+  const d = run.world.distance;
+  const cps = TUTORIAL.checkpoints;
+  const p = run.player;
+  if (tut.cp + 1 < cps.length && d >= cps[tut.cp + 1] && p.onGround && !p.ramp) {
+    tut.cp++;
+    tut.snap = cloneRun(run, CONFIG);
+  }
+  if (d >= TUTORIAL.length) {
+    setSetting('tutorialDone', true);
+    game.tutorial = null;
+  }
+}
+
 // Opening the panel pauses; tap the game area to play on with it open.
-const tuning = createTuningPanel(CONFIG, { onOpen: pause });
+const tuning = createTuningPanel(CONFIG, {
+  onOpen: pause,
+  controls: [
+    { type: 'check', label: 'invincible', get: () => dbg.invincible, set: (v) => (dbg.invincible = v) },
+    { type: 'check', label: 'slow motion', get: () => dbg.slowmo, set: (v) => (dbg.slowmo = v) },
+    {
+      type: 'check',
+      label: 'autopilot',
+      get: () => dbg.autopilot,
+      set: (v) => {
+        dbg.autopilot = v;
+        bot.reset();
+      },
+    },
+    {
+      type: 'select',
+      label: 'tier',
+      options: [[0, 'by run time'], [1, '1'], [2, '2'], [3, '3'], [4, '4']],
+      get: () => dbg.tier,
+      set: (v) => (dbg.tier = Number(v)),
+    },
+    {
+      type: 'select',
+      label: 'segment',
+      options: SEGMENTS.map((s) => [s.id, `${s.id} (tier ${s.tier})`]),
+      get: () => dbg.segPick,
+      set: (v) => (dbg.segPick = v),
+    },
+    { type: 'button', label: 'SPAWN SEGMENT NEXT', onClick: () => (game.run.world.forceNext = dbg.segPick) },
+    {
+      type: 'button',
+      label: 'TUTORIAL ON NEXT RUN',
+      onClick: () => setSetting('tutorialDone', false),
+    },
+  ],
+});
 tuning.setButtonVisible(debug.enabled);
 
 function handleRunEvents(run) {
@@ -78,7 +181,9 @@ function handleRunEvents(run) {
     const e = evs[i];
     if (e.type === 'trick') {
       addPopup(TRICK_NAMES[e.trick], COL.gold);
-    } else if (e.type === 'land' && e.flips > 0) {
+    } else if (e.type === 'grind') {
+      addPopup(TRICK_NAMES.grind, COL.mint);
+    } else if (e.type === 'land' && e.tricks > 0) {
       if (e.result === 'sketchy') addPopup('SKETCHY! +' + e.points, COL.orange);
       else addPopup('+' + e.points, COL.mint);
     }
@@ -136,11 +241,18 @@ function tick(dt) {
       stepRun(game.run, dt, CONFIG);
       updatePopups(dt, CONFIG);
       break;
-    case 'play':
+    case 'play': {
+      applyDebug(game.run);
+      if (dbg.autopilot) {
+        const a = bot.decide(game.run);
+        if (a) handleAction(a);
+      }
       stepRun(game.run, dt, CONFIG);
       updatePopups(dt, CONFIG);
-      if (game.run.over) setState('dead');
+      if (game.tutorial) updateTutorial(dt);
+      else if (game.run.over) setState('dead');
       break;
+    }
     // 'paused': frozen
   }
   handleRunEvents(game.run);
@@ -154,16 +266,20 @@ function render() {
   if (game.portrait) {
     drawRotateScreen(g, W, H, game.time, CONFIG);
   } else {
-    drawWorld(g, W, game.run, sprites, CONFIG);
-    if (debug.enabled) drawHitboxes(g, W, game.run);
+    const run = game.run;
+    drawWorld(g, W, run, sprites, CONFIG);
+    if (debug.enabled) drawHitboxes(g, W, run);
     if (game.state === 'start') {
       drawStartScreen(g, W, H, game.time, game.touch, BUILD, CONFIG);
     } else {
-      drawHud(g, W, game.run.score);
+      drawHud(g, W, run.score);
+      if (game.tutorial && !run.over) {
+        const text = tutorialPrompt(run.world.distance, game.touch);
+        if (text) drawPrompt(g, W, text);
+      }
       drawPopups(g, W, CONFIG);
       if (game.state === 'dead') {
         const canRetry = game.stateTime >= CONFIG.bail.retryDelay;
-        const run = game.run;
         drawDeadScreen(g, W, H, game.stateTime, run.score, run.bailReason, canRetry, game.touch, sprites, CONFIG);
       } else if (game.state === 'paused') {
         drawPausedScreen(g, W, H, game.stateTime, game.touch, sprites, CONFIG);
@@ -172,6 +288,12 @@ function render() {
   }
   if (debug.enabled) debug.draw(g, W, debugLines);
   renderer.present();
+}
+
+function segmentAhead(run) {
+  const x = run.world.distance + CONFIG.world.skaterX;
+  for (const ob of run.world.obstacles) if (ob.x + ob.w > x) return ob.seg || '-';
+  return '-';
 }
 
 function debugLines(d) {
@@ -184,11 +306,13 @@ function debugLines(d) {
     `RES ${renderer.width}X${renderer.height} ${renderer.scale}X DPR ${renderer.dpr.toFixed(2)}`,
     `SPD ${run.world.speed.toFixed(0)} DIST ${run.world.distance.toFixed(0)}`,
     `FLIP ${flip} Q ${p.queued ? p.queued.toUpperCase() : '-'}`,
-    `TIER - SEG -`,
+    `TIER ${run.world.tier} SEG ${segmentAhead(run).toUpperCase()}`,
     `SEED ${run.seed}`,
-    `STATE ${game.state.toUpperCase()}`,
+    `STATE ${game.state.toUpperCase()}${game.tutorial ? ' TUTORIAL' : ''}`,
     `BUILD ${BUILD}`,
   ];
+  const flags = [dbg.autopilot && 'BOT', dbg.invincible && 'INVINCIBLE', dbg.slowmo && 'SLOW-MO'].filter(Boolean);
+  if (flags.length) lines.push(flags.join(' '));
   const tuned = tuning.changedCount();
   if (tuned > 0) lines.push(`TUNED ${tuned} VALUES`);
   return lines;
@@ -225,7 +349,7 @@ function frame(now) {
     debug.frame(dt);
     if (dt > CONFIG.loop.maxFrameTime) dt = CONFIG.loop.maxFrameTime;
     if (dt < 0) dt = 0;
-    acc += snap(dt);
+    acc += snap(dt) * (dbg.slowmo ? CONFIG.debug.slowMotion : 1);
     checkPortrait();
 
     const t0 = performance.now();
@@ -263,6 +387,7 @@ if (debug.enabled) {
     game,
     config: CONFIG,
     tuning,
+    dbg,
     step(n = 1) {
       checkPortrait();
       for (let i = 0; i < n; i++) tick(STEP);
