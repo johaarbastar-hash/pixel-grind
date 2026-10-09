@@ -54,13 +54,21 @@ const GLYPHS = {
   x: ['.......', '.......', '##...##', '.##.##.', '..###..', '.##.##.', '##...##'],
   '/': ['......#', '.....##', '....##.', '...##..', '..##...', '.##....', '##.....'],
   '%': ['##....#', '##...##', '....##.', '...##..', '..##...', '.##..##', '##...##'],
+  // Swipe directions
+  '←': ['.......', '..#....', '.##....', '#######', '.##....', '..#....', '.......'],
+  '→': ['.......', '....#..', '....##.', '#######', '....##.', '....#..', '.......'],
+  '↑': ['..##...', '.####..', '######.', '..##...', '..##...', '..##...', '.......'],
+  '↓': ['.......', '..##...', '..##...', '..##...', '######.', '.####..', '..##...'],
 };
 
-// char code -> atlas slot (-1 = blank)
+// char code -> atlas slot (-1 = blank); arrows live above ASCII
 const SLOT = new Int16Array(128).fill(-1);
+const EXTRA = new Map();
 const ORDER = Object.keys(GLYPHS);
 ORDER.forEach((ch, i) => {
-  SLOT[ch.charCodeAt(0)] = i;
+  const code = ch.charCodeAt(0);
+  if (code < 128) SLOT[code] = i;
+  else EXTRA.set(code, i);
 });
 // lower-case letters map to upper-case, except x (multiply sign)
 for (let c = 97; c <= 122; c++) {
@@ -108,7 +116,7 @@ function drawRaw(g, text, x, y, atlas, scale) {
   const size = CHAR_W * scale;
   for (let i = 0; i < text.length; i++) {
     const code = text.charCodeAt(i);
-    const slot = code < 128 ? SLOT[code] : -1;
+    const slot = code < 128 ? SLOT[code] : EXTRA.get(code) ?? -1;
     if (slot >= 0) g.drawImage(atlas, slot * CHAR_W, 0, CHAR_W, CHAR_H, x + i * size, y, size, size);
   }
 }

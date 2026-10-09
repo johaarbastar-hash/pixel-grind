@@ -114,16 +114,173 @@ function blinkOn(t, cfg) {
   return Math.floor(t / cfg.ui.blinkPeriod) % 2 === 0;
 }
 
-export function drawStartScreen(g, W, H, t, touch, build, cfg) {
-  const cx = W >> 1;
-  drawText(g, 'PIXEL GRIND', cx, 28, COL.gold, { align: 'center', scale: 2, shadow: COL.ink });
-  if (blinkOn(t, cfg)) {
-    drawText(g, touch ? 'TAP TO START' : 'SPACE OR CLICK TO START', cx, 84, COL.cream, { align: 'center', shadow: COL.ink });
+const center = { align: 'center', shadow: COL.ink };
+
+// 75% dither box: dims what's behind (the demo run) enough for text to read,
+// but keeps it visible. Ink everywhere except every other pixel of every
+// other row.
+let dither = null; // pre-rendered once, copied with a single drawImage
+
+function ditherBox(g, x, y, w, h) {
+  if (!dither || dither.width < w + 1 || dither.height < h + 1) {
+    dither = document.createElement('canvas');
+    dither.width = Math.max(w, 400) + 2;
+    dither.height = Math.max(h, 180) + 2;
+    const d = dither.getContext('2d');
+    d.fillStyle = COL.ink;
+    for (let yy = 0; yy < dither.height; yy++) {
+      if (yy & 1) d.fillRect(0, yy, dither.width, 1);
+      else for (let xx = 1; xx < dither.width; xx += 2) d.fillRect(xx, yy, 1, 1);
+    }
   }
-  drawText(g, touch ? 'TAP TO OLLIE' : 'SPACE TO OLLIE', cx, 100, COL.mint, { align: 'center', shadow: COL.ink });
-  drawText(g, touch ? 'SWIPE TO FLIP' : 'ARROWS TO FLIP', cx, 110, COL.mint, { align: 'center', shadow: COL.ink });
-  drawText(g, 'BUILD ' + build, W - 4, H - 10, COL.steel, { align: 'right' });
+  // Keep the pattern's phase fixed to the screen so it doesn't shimmer.
+  g.drawImage(dither, x & 1, y & 1, w, h, x, y, w, h);
+  g.fillStyle = COL.steel;
+  g.fillRect(x, y, w, 1);
+  g.fillRect(x, y + h - 1, w, 1);
 }
+
+// Big-pixel button with a label; returns nothing (hit-test with buttonAt).
+function drawButton(g, b, label, active) {
+  g.fillStyle = active ? COL.indigo : COL.ink;
+  g.fillRect(b.x, b.y, b.w, b.h);
+  g.fillStyle = active ? COL.gold : COL.steel;
+  g.fillRect(b.x, b.y, b.w, 1);
+  g.fillRect(b.x, b.y + b.h - 1, b.w, 1);
+  g.fillRect(b.x, b.y, 1, b.h);
+  g.fillRect(b.x + b.w - 1, b.y, 1, b.h);
+  drawText(g, label, b.x + (b.w >> 1), b.y + ((b.h - 8) >> 1) + 1, active ? COL.gold : COL.cream, { align: 'center' });
+}
+
+function inRect(b, x, y) {
+  return x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h;
+}
+
+// --- Boot ----------------------------------------------------------------------
+
+const BOOT_LINES = [
+  ['PIXEL GRIND SYSTEM V1.0', ''],
+  ['ROM CHECK ........ ', 'OK'],
+  ['RAM CHECK ........ ', 'OK'],
+  ['SOUND CHIP ....... ', 'OK'],
+  ['TOUCH PANEL ...... ', 'OK'],
+  ['', ''],
+  ['INSERT BOARD', ''],
+];
+
+export function drawBootScreen(g, W, H, t, cfg) {
+  g.fillStyle = COL.ink;
+  g.fillRect(0, 0, W, H);
+  const per = cfg.boot.duration / (BOOT_LINES.length + 1);
+  const shown = Math.min(BOOT_LINES.length, Math.floor(t / per));
+  for (let i = 0; i < shown; i++) {
+    const [text, ok] = BOOT_LINES[i];
+    const y = 30 + i * 12;
+    drawText(g, text, 24, y, i === BOOT_LINES.length - 1 ? COL.gold : COL.mint);
+    if (ok) drawText(g, ok, 24 + text.length * 8, y, COL.cream);
+  }
+  if (Math.floor(t / 0.25) % 2 === 0) {
+    g.fillStyle = COL.mint; // blinking cursor
+    g.fillRect(24, 30 + shown * 12, 7, 7);
+  }
+}
+
+// --- Title / attract ---------------------------------------------------------------
+// Logo, flashing TAP TO START, and a panel cycling through how-to-play, the
+// high-score table and stats, over the bot's demo run.
+
+export const TITLE_PANELS = 3;
+
+export function drawTitleScreen(g, W, H, t, panel, data, cfg) {
+  const cx = W >> 1;
+  drawText(g, 'PIXEL GRIND', cx, 10, COL.gold, { align: 'center', scale: 2, shadow: COL.ink });
+  if (blinkOn(t, cfg)) drawText(g, data.touch ? 'TAP TO START' : 'SPACE OR CLICK TO START', cx, 32, COL.cream, center);
+
+  const bx = cx - 124;
+  ditherBox(g, bx, 46, 248, 112);
+  let y = 52;
+  const line = (text, col = COL.cream) => {
+    drawText(g, text, cx, y, col, center);
+    y += 11;
+  };
+  if (panel === 0) {
+    line('HOW TO PLAY', COL.rose);
+    y += 3;
+    line(data.touch ? 'TAP: OLLIE' : 'SPACE: OLLIE', COL.mint);
+    line(data.touch ? 'SWIPE FOR A FLIP:' : 'ARROW KEYS FOR A FLIP:');
+    line('← KICKFLIP   → HEELFLIP', COL.gold);
+    line('↓ SHOVE-IT   ↑ 360 FLIP', COL.gold);
+    line('LAND ON RAILS TO GRIND', COL.mint);
+    line('KICKERS = 2 FLIPS', COL.mint);
+    line('MIX TRICKS FOR A MULTIPLIER');
+  } else if (panel === 1) {
+    line('HIGH SCORES', COL.rose);
+    y -= 1;
+    data.scores.forEach((s, i) => {
+      const rank = String(i + 1).padStart(2, ' ');
+      drawText(g, `${rank}. ${s.name}  ${String(s.score).padStart(6, '0')}`, cx, y, i === 0 ? COL.gold : COL.cream, center);
+      y += 9;
+    });
+  } else {
+    const st = data.stats;
+    line('STATS', COL.rose);
+    y += 6;
+    line('RUNS ' + st.runs);
+    line('DISTANCE ' + (st.distance / 10000).toFixed(1) + ' KM');
+    line('BEST COMBO ' + st.bestCombo);
+    line('TRICKS LANDED ' + st.tricks);
+  }
+
+  if (data.installable) drawButton(g, INSTALL_BUTTON(W), 'INSTALL', false);
+  drawText(g, 'BUILD ' + data.build, W - 4, H - 10, COL.steel, { align: 'right' });
+}
+
+// Shown on the title screen when the browser offers installing the app (M8).
+const INSTALL_BUTTON = (W) => ({ x: 4, y: 162, w: 64, h: 14 });
+
+export function titleButtonAt(x, y, W, installable) {
+  return installable && inRect(INSTALL_BUTTON(W), x, y) ? 'install' : null;
+}
+
+// --- Tutorial prompt -------------------------------------------------------------
+
+export function drawPrompt(g, W, lines) {
+  for (let i = 0; i < lines.length; i++) drawText(g, lines[i], W >> 1, 22 + i * 10, COL.gold, center);
+}
+
+// --- Countdown after a pause -------------------------------------------------------
+
+export function drawCountdown(g, W, label) {
+  drawText(g, label, W >> 1, 64, COL.gold, { align: 'center', scale: 2, shadow: COL.ink });
+}
+
+// --- Initials entry --------------------------------------------------------------
+// Swipe up / down to change the letter, tap to confirm it.
+
+export function drawInitialsScreen(g, W, H, t, entry, touch, sprites) {
+  const cx = W >> 1;
+  g.drawImage(sprites.checker, 0, 0);
+  drawText(g, entry.rank === 0 ? 'NEW HIGH SCORE!' : 'TOP 10!', cx, 24, COL.gold, { align: 'center', scale: 2, shadow: COL.ink });
+  drawText(g, `RANK ${entry.rank + 1}   SCORE ${entry.score}`, cx, 50, COL.cream, center);
+  drawText(g, 'ENTER YOUR INITIALS', cx, 66, COL.mint, center);
+  for (let i = 0; i < 3; i++) {
+    const x = cx - 40 + i * 32;
+    const active = i === entry.cursor;
+    if (active) {
+      g.fillStyle = COL.indigo;
+      g.fillRect(x - 3, 84, 22, 22);
+      if (Math.floor(t / 0.3) % 2 === 0) {
+        drawText(g, '↑', x + 4, 74, COL.gold);
+        drawText(g, '↓', x + 4, 108, COL.gold);
+      }
+    }
+    const ch = String.fromCharCode(65 + entry.letters[i]);
+    drawText(g, ch, x + 1, 87, i < entry.cursor ? COL.mint : active ? COL.gold : COL.cream, { scale: 2, shadow: COL.ink });
+  }
+  drawText(g, touch ? 'SWIPE ↑↓ TO CHANGE   TAP: OK' : '↑↓ TO CHANGE   SPACE: OK', cx, 126, COL.steel, center);
+}
+
+// --- Game over -----------------------------------------------------------------
 
 // By bail reason: obstacle type (city skin names), 'gap' or 'flip'.
 const BAIL_REASON = {
@@ -135,22 +292,34 @@ const BAIL_REASON = {
   flip: 'LANDED MID-FLIP',
 };
 
-// Tutorial prompt across the top of the screen.
-export function drawPrompt(g, W, text) {
-  drawText(g, text, W >> 1, 24, COL.gold, { align: 'center', shadow: COL.ink });
+const GAMEOVER_BUTTONS = (W) => ({
+  share: { x: (W >> 1) - 74, y: 128, w: 68, h: 16 },
+  title: { x: (W >> 1) + 6, y: 128, w: 68, h: 16 },
+});
+
+export function gameOverButtonAt(x, y, W) {
+  const b = GAMEOVER_BUTTONS(W);
+  if (inRect(b.share, x, y)) return 'share';
+  if (inRect(b.title, x, y)) return 'title';
+  return null;
 }
 
-// Game over (full screen with best combo etc. comes in M6).
-export function drawGameOverScreen(g, W, H, t, run, canRetry, touch, sprites, cfg) {
+// result: { score, bestCombo, distance (px), reason, rank (-1 = not in top 10) }
+export function drawGameOverScreen(g, W, H, t, result, canRetry, touch, pressed, sprites, cfg) {
   const cx = W >> 1;
   g.drawImage(sprites.checker, 0, 0);
-  drawText(g, 'GAME OVER', cx, 36, COL.rose, { align: 'center', scale: 2, shadow: COL.ink });
-  drawText(g, BAIL_REASON[run.bailReason] || '', cx, 58, COL.steel, { align: 'center', shadow: COL.ink });
-  drawText(g, 'SCORE ' + run.score, cx, 74, COL.cream, { align: 'center', shadow: COL.ink });
-  drawText(g, 'BEST COMBO ' + run.tricks.best, cx, 84, COL.cream, { align: 'center', shadow: COL.ink });
-  if (canRetry && blinkOn(t, cfg)) {
-    drawText(g, touch ? 'TAP TO RETRY' : 'SPACE TO RETRY', cx, 104, COL.gold, { align: 'center', shadow: COL.ink });
-  }
+  drawText(g, 'GAME OVER', cx, 14, COL.rose, { align: 'center', scale: 2, shadow: COL.ink });
+  drawText(g, BAIL_REASON[result.reason] || '', cx, 36, COL.steel, center);
+  drawText(g, 'SCORE ' + result.score, cx, 54, COL.cream, center);
+  drawText(g, 'BEST COMBO ' + result.bestCombo, cx, 66, COL.cream, center);
+  drawText(g, 'DISTANCE ' + Math.floor(result.distance / 10) + 'M', cx, 78, COL.cream, center);
+  if (result.rank === 0) drawText(g, 'NEW HIGH SCORE!', cx, 96, COL.gold, center);
+  else if (result.rank > 0) drawText(g, 'RANK ' + (result.rank + 1) + ' OF 10', cx, 96, COL.gold, center);
+  if (result.msg) drawText(result.msg, cx, 112, COL.mint, center);
+  const b = GAMEOVER_BUTTONS(W);
+  drawButton(g, b.share, 'SHARE', pressed === 'share');
+  drawButton(g, b.title, 'TITLE', pressed === 'title');
+  if (canRetry && blinkOn(t, cfg)) drawText(g, touch ? 'TAP TO RETRY' : 'SPACE TO RETRY', cx, 156, COL.gold, center);
 }
 
 // --- Trick popups ------------------------------------------------------------

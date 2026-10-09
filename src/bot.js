@@ -22,7 +22,7 @@ function act(run, action, cfg) {
   else runFlip(run, action, cfg);
 }
 
-export function createBot(cfg, { flips = false, seed = 1 } = {}) {
+export function createBot(cfg, { flips = false, seed = 1, budget = cfg.bot.budget } = {}) {
   const dt = 1 / cfg.loop.hz;
   const rng = createRng(seed); // the bot's own randomness: never the run's
   let planTick = -1;
@@ -55,7 +55,7 @@ export function createBot(cfg, { flips = false, seed = 1 } = {}) {
 
   // Acts at tick k, then plays until back in control. Returns that state or null.
   function tryAt(state, k, action) {
-    if (spent > cfg.bot.budget) return null;
+    if (spent > budget) return null;
     const s = clone(state);
     const start = s.ticks;
     for (let i = 0; i < k; i++) {
@@ -82,7 +82,7 @@ export function createBot(cfg, { flips = false, seed = 1 } = {}) {
     if (depth <= 0) return { k: -1 };
     const w = pre || wait(state);
     if (w.safe) return { k: -1 };
-    if (spent > cfg.bot.budget) return null;
+    if (spent > budget) return null;
 
     const cands = [];
     for (const k of w.popTicks) {
@@ -115,7 +115,7 @@ export function createBot(cfg, { flips = false, seed = 1 } = {}) {
 
     for (const c of order) {
       if (plan(c.after, depth - 1, c.w2)) return { k: c.k, window: c.window || 1, seg: w.seg };
-      if (spent > cfg.bot.budget) break;
+      if (spent > budget) break;
     }
     return null;
   }
@@ -151,7 +151,7 @@ export function createBot(cfg, { flips = false, seed = 1 } = {}) {
       const action = res && res.k >= 0 ? chooseAction(run, res.k) : null;
       stats.last = res && res.k >= 0 ? { window: res.window, seg: res.seg, tick: t } : null;
       stats.simTicks += spent;
-      if (spent > cfg.bot.budget) stats.overBudget++;
+      if (spent > budget) stats.overBudget++;
       if (!res) {
         stats.noPlan++;
         nextCheck = t + 1;

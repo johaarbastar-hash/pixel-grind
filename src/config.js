@@ -188,6 +188,21 @@ export const CONFIG = {
   },
 
   attract: {
-    seed: 20261009, // fixed seed for the title-screen run
+    seed: 20261009, // fixed seed for the title-screen demo run
+    restartAfter: 75, // s: the demo starts over (keeps it at a watchable speed)
+    botBudget: 40000, // smaller planning budget than the soak test: keeps frames smooth
+    panelTime: 5, // s per title panel (how to play / high scores / stats)
+  },
+
+  boot: {
+    duration: 2.0, // s of fake boot text, once per session (tap skips)
+  },
+
+  countdown: {
+    step: 0.6, // s per number of the 3-2-1 after a pause
+  },
+
+  menus: {
+    initialsLockout: 0.6, // s before taps count on the initials screen
   },
 };

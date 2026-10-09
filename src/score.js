@@ -11,6 +11,7 @@ export function createScore() {
   return {
     banked: 0, // trick points banked this run
     best: 0, // best single banked combo
+    landed: 0, // flips and grinds landed this run (stats)
     live: false,
     comboPoints: 0, // sum of trick points so far (before the multiplier)
     comboTricks: 0, // tricks in the combo, not counting ollies
@@ -70,6 +71,7 @@ export function comboValue(s) {
 export function bankCombo(s, fraction) {
   const pts = Math.floor(s.comboPoints * multiplier(s) * fraction);
   s.banked += pts;
+  s.landed += s.comboTricks;
   if (pts > s.best) s.best = pts;
   s.live = false;
   return pts;

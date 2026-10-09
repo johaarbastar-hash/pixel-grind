@@ -40,6 +40,8 @@ export function createInput(cfg) {
     // latest press came from a pointer or the keyboard. Used by menus.
     pointer: { x: 0, y: 0 },
     lastSource: 'key',
+    // The latest release ended a swipe (menus ignore swipes as taps).
+    releaseWasSwipe: false,
     drain() {
       const out = queue;
       queue = spare;
@@ -64,6 +66,7 @@ export function createInput(cfg) {
     const min = cfg.input.swipeDistance;
     if (dx * dx + dy * dy < min * min) return;
     tr.done = true;
+    tr.swiped = true;
     if (Math.abs(dx) >= Math.abs(dy)) push(dx < 0 ? 'flipL' : 'flipR');
     else push(dy < 0 ? 'flipU' : 'flipD');
   }
@@ -105,6 +108,7 @@ export function createInput(cfg) {
       e.preventDefault();
       api.pointer.x = e.clientX;
       api.pointer.y = e.clientY;
+      api.releaseWasSwipe = !!tr.swiped;
       if (e.pointerType !== 'mouse') gesture(e);
       push('release');
     },
@@ -167,6 +171,7 @@ export function createInput(cfg) {
     if (isFormField(e)) return;
     if (e.code === 'Space' || e.code === 'Enter') {
       e.preventDefault();
+      api.releaseWasSwipe = false;
       push('release');
     }
   });
