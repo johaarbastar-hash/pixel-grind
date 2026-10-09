@@ -194,7 +194,30 @@ const BOARD = {
   ],
 };
 
-// Placeholder flip animations (final frames in M7).
+// Moves a list of rects.
+const shift = (rects, dx, dy) => rects.map(([c, x, y, w, h]) => [c, x + dx, y + dy, w, h]);
+
+// Board with the nose popped up (ollie snap).
+const BOARD_POP = [
+  [COL.ink, 0, 22, 1, 1],
+  [COL.ink, 1, 22, 5, 1],
+  [COL.gold, 1, 23, 5, 1],
+  [COL.ink, 6, 21, 5, 1],
+  [COL.gold, 6, 22, 5, 1],
+  [COL.ink, 11, 20, 4, 1],
+  [COL.gold, 11, 21, 4, 1],
+  [COL.ink, 15, 19, 1, 1],
+];
+
+// Back foot pushing off the ground beside the board: [leg x, foot x, foot row].
+const PUSH_STEPS = [
+  [5, 4, 21],
+  [4, 2, 23],
+  [3, 1, 23],
+  [4, 3, 21],
+];
+
+// Flip animations: board frames under tucked knees.
 const FLIP_FRAMES = {
   kickflip: ['flat', 'edgeUnder', 'upsideDown', 'edgeGrip', 'flat'],
   heelflip: ['flat', 'edgeGrip', 'upsideDown', 'edgeUnder', 'flat'],
@@ -221,6 +244,55 @@ function buildSkater() {
     ],
     air: sprite(16, 24, [...HEAD, ...TORSO, ...ARMS_UP, ...LEGS], BOARD.flat),
     flips,
+    // Kick-push: leaning in, back foot to the ground and back.
+    push: PUSH_STEPS.map(([legX, footX, footY]) =>
+      sprite(16, 24, [...shift([...HEAD, ...TORSO, ...ARMS_DOWN], 1, 0), ...LEGS.slice(2, 4), LEGS[5]], [
+        ...BOARD.flat,
+        [COL.indigo, legX, 16, 2, footY - 16],
+        [COL.white, footX, footY, 3, 1],
+      ]),
+    ),
+    // Ollie snap: tail down, nose up, front knee up.
+    pop: sprite(
+      16,
+      24,
+      [...shift([...HEAD, ...TORSO, ...ARMS_UP], 0, -1), [COL.indigo, 5, 15, 2, 4], [COL.indigo, 9, 15, 3, 2], [COL.white, 3, 19, 3, 1], [COL.white, 10, 17, 3, 1]],
+      BOARD_POP,
+    ),
+    // Landing squash: knees bent, body 2 px lower.
+    squash: sprite(
+      16,
+      24,
+      [...shift([...HEAD, ...TORSO, ...ARMS_DOWN], 0, 2), [COL.indigo, 4, 18, 3, 2], [COL.indigo, 9, 18, 3, 2], [COL.white, 3, 20, 3, 1], [COL.white, 10, 20, 3, 1]],
+      BOARD.flat,
+    ),
+    // Getting back up after a bail: crouched, then squash, then riding.
+    getUp: sprite(
+      16,
+      24,
+      [...shift([...HEAD, ...TORSO, ...ARMS_DOWN], 1, 5), [COL.indigo, 4, 20, 8, 1], [COL.white, 3, 20, 2, 1], [COL.white, 11, 20, 2, 1]],
+      BOARD.flat,
+    ),
+    // Tumbling: thrown back, then flat in the air (24 x 16, bottom on the ground).
+    tumble: [
+      sprite(24, 16, [
+        [COL.teal, 3, 3, 2, 4], // cap
+        [COL.skin, 5, 3, 4, 4], // head
+        [COL.rose, 8, 5, 6, 5], // shirt
+        [COL.skin, 6, 9, 2, 3], // arm flung down
+        [COL.indigo, 13, 4, 4, 4], // legs up
+        [COL.indigo, 16, 1, 3, 4],
+        [COL.white, 18, 0, 3, 2], // shoes
+      ]),
+      sprite(24, 16, [
+        [COL.white, 1, 7, 1, 3],
+        [COL.indigo, 2, 7, 6, 3],
+        [COL.rose, 8, 6, 7, 4],
+        [COL.skin, 10, 3, 3, 3], // arm up
+        [COL.skin, 15, 6, 4, 4],
+        [COL.teal, 19, 6, 2, 4],
+      ]),
+    ],
     // Lying on the ground after a bail (24 x 10, bottom row on the ground).
     bail: sprite(24, 10, [
       [COL.white, 1, 5, 1, 3], // shoes
@@ -347,19 +419,51 @@ function buildCone() {
 }
 
 // --- Background layers -----------------------------------------------------
+// Sunset to night in 4 palette phases, swapped whole (no continuous tinting,
+// which would break the 16-colour look). Each layer is pre-rendered once per
+// phase and tiled.
 
-// Sunset sky in flat palette bands with dithered seams, plus a striped sun.
-function buildSky(w, h) {
+export const PHASES = [
+  {
+    name: 'sunset',
+    bands: [COL.navy, COL.indigo, COL.purple, COL.magenta, COL.rose, COL.orange],
+    sun: { y: 112, top: COL.gold, bottom: COL.orange },
+    stars: 0,
+    windows: 0.12,
+    lamps: false,
+  },
+  {
+    name: 'dusk',
+    bands: [COL.navy, COL.indigo, COL.purple, COL.purple, COL.magenta, COL.rose],
+    sun: { y: 134, top: COL.orange, bottom: COL.rose },
+    stars: 10,
+    windows: 0.2,
+    lamps: true,
+  },
+  {
+    name: 'twilight',
+    bands: [COL.ink, COL.navy, COL.indigo, COL.indigo, COL.purple, COL.magenta],
+    sun: null,
+    stars: 40,
+    windows: 0.28,
+    lamps: true,
+  },
+  {
+    name: 'night',
+    bands: [COL.ink, COL.ink, COL.navy, COL.navy, COL.indigo, COL.indigo],
+    sun: null,
+    moon: { x: 70, y: 30, r: 9 },
+    stars: 80,
+    windows: 0.34,
+    lamps: true,
+  },
+];
+
+// Sky in flat palette bands with dithered seams, plus sun / moon and stars.
+function buildSky(w, h, phase) {
   const c = makeCanvas(w, h);
   const g = c.getContext('2d');
-  const bands = [
-    [COL.navy, 0],
-    [COL.indigo, 25],
-    [COL.purple, 50],
-    [COL.magenta, 75],
-    [COL.rose, 100],
-    [COL.orange, 125],
-  ];
+  const bands = phase.bands.map((col, i) => [col, i * 25]);
   bands.forEach(([col, y0], i) => {
     const y1 = i + 1 < bands.length ? bands[i + 1][1] : h;
     g.fillStyle = col;
@@ -368,6 +472,7 @@ function buildSky(w, h) {
   for (let i = 1; i < bands.length; i++) {
     const [lower, y] = bands[i];
     const upper = bands[i - 1][0];
+    if (lower === upper) continue;
     for (let x = 0; x < w; x++) {
       g.fillStyle = lower;
       if ((x & 3) === 0) g.fillRect(x, y - 2, 1, 1);
@@ -376,21 +481,43 @@ function buildSky(w, h) {
       if ((x & 3) === 2) g.fillRect(x, y, 1, 1);
     }
   }
-  // Sun: gold top, orange lower half with widening gaps.
-  const cx = 244;
-  const cy = 112;
-  const r = 26;
-  for (let dy = -r; dy <= r; dy++) {
-    if (dy > 2 && (dy - 3) % 6 < 1 + Math.floor(dy / 9)) continue;
-    const half = Math.floor(Math.sqrt(r * r - dy * dy));
-    g.fillStyle = dy < 0 ? COL.gold : COL.orange;
-    g.fillRect(cx - half, cy + dy, half * 2 + 1, 1);
+  // Stars: fixed positions, more as it gets darker.
+  const stars = createRng(5);
+  for (let i = 0; i < phase.stars; i++) {
+    const x = stars.int(0, w - 1);
+    const y = stars.int(0, 70);
+    g.fillStyle = stars.chance(0.25) ? COL.white : COL.steel;
+    g.fillRect(x, y, 1, 1);
+  }
+  // Sun: striped lower half with widening gaps, sinking phase by phase.
+  if (phase.sun) {
+    const cx = 244;
+    const cy = phase.sun.y;
+    const r = 26;
+    for (let dy = -r; dy <= r && cy + dy < h; dy++) {
+      if (dy > 2 && (dy - 3) % 6 < 1 + Math.floor(dy / 9)) continue;
+      const half = Math.floor(Math.sqrt(r * r - dy * dy));
+      g.fillStyle = dy < 0 ? phase.sun.top : phase.sun.bottom;
+      g.fillRect(cx - half, cy + dy, half * 2 + 1, 1);
+    }
+  }
+  if (phase.moon) {
+    const { x: mx, y: my, r } = phase.moon;
+    for (let dy = -r; dy <= r; dy++) {
+      const half = Math.floor(Math.sqrt(r * r - dy * dy));
+      g.fillStyle = COL.cream;
+      g.fillRect(mx - half, my + dy, half * 2 + 1, 1);
+    }
+    g.fillStyle = COL.steel; // craters
+    g.fillRect(mx - 3, my - 2, 2, 2);
+    g.fillRect(mx + 2, my + 3, 3, 2);
   }
   return c;
 }
 
-// Far skyline silhouettes with lit windows; tiles seamlessly.
-function buildSkyline(w, h) {
+// Far skyline silhouettes with lit windows; tiles seamlessly. Same buildings
+// in every phase, more windows lit as it gets dark.
+function buildSkyline(w, h, phase) {
   const c = makeCanvas(w, h);
   const g = c.getContext('2d');
   const rng = createRng(7);
@@ -406,13 +533,94 @@ function buildSkyline(w, h) {
     for (let wy = top + 4; wy < h - 4; wy += 4) {
       for (let wx = x + 2; wx < x + bw - 3; wx += 4) {
         const roll = rng.next();
-        if (roll < 0.14) {
+        if (roll < phase.windows) {
           g.fillStyle = roll < 0.03 ? COL.cream : COL.gold;
           g.fillRect(wx, wy, 2, 1);
         }
       }
     }
     x += bw + (rng.chance(0.3) ? rng.int(1, 4) : 0);
+  }
+  return c;
+}
+
+// Mid layer: closer, shorter blocks in ink with bigger lit windows and
+// rooftop clutter, with gaps so the far skyline shows through.
+function buildMid(w, h, phase) {
+  const c = makeCanvas(w, h);
+  const g = c.getContext('2d');
+  const rng = createRng(23);
+  let x = rng.int(0, 20);
+  while (x < w - 10) {
+    const bw = Math.min(rng.int(30, 64), w - x);
+    const bh = rng.int(18, h - 4);
+    const top = h - bh;
+    g.fillStyle = COL.ink;
+    g.fillRect(x, top, bw, bh);
+    g.fillStyle = COL.navy; // roof edge
+    g.fillRect(x, top, bw, 1);
+    if (rng.chance(0.5)) {
+      g.fillStyle = COL.ink; // water tank / AC unit
+      const ux = x + rng.int(3, bw - 10);
+      g.fillRect(ux, top - 5, 7, 5);
+      g.fillRect(ux + 1, top - 7, 5, 2);
+    }
+    for (let wy = top + 4; wy < h - 6; wy += 6) {
+      for (let wx = x + 3; wx < x + bw - 4; wx += 6) {
+        const roll = rng.next();
+        if (roll < phase.windows * 1.2) {
+          g.fillStyle = roll < 0.05 ? COL.cream : COL.gold;
+          g.fillRect(wx, wy, 3, 2);
+        } else {
+          g.fillStyle = COL.navy; // dark window
+          g.fillRect(wx, wy, 3, 2);
+        }
+      }
+    }
+    x += bw + rng.int(10, 40);
+  }
+  return c;
+}
+
+// Street props on the far edge of the pavement: lamp posts and a low
+// chain-link fence (dark and dithered so it never reads as a grind rail).
+// Two versions: lamps off and lamps on. Drawn from y = groundY - h + 6.
+function buildProps(w, h, lit) {
+  const c = makeCanvas(w, h);
+  const g = c.getContext('2d');
+  const base = h - 6; // ground line inside the tile
+  // Fence: posts and a mesh of dots
+  for (let x = 0; x < w; x++) {
+    for (let y = base - 9; y < base; y++) {
+      if ((x + y) % 3 === 0) {
+        g.fillStyle = COL.indigo;
+        g.fillRect(x, y, 1, 1);
+      }
+    }
+  }
+  g.fillStyle = COL.slate;
+  g.fillRect(0, base - 10, w, 1);
+  for (let x = 0; x < w; x += 16) g.fillRect(x, base - 10, 1, 10);
+  // Lamp posts
+  for (const lx of [40, 200]) {
+    fillRects(g, [
+      [COL.slate, lx, base - 44, 2, 44], // pole
+      [COL.slate, lx - 1, base - 2, 4, 2], // foot
+      [COL.slate, lx + 2, base - 44, 7, 1], // arm
+      [lit ? COL.cream : COL.steel, lx + 7, base - 43, 4, 2], // lamp head
+    ]);
+    if (lit) {
+      g.fillStyle = COL.gold; // glow
+      g.fillRect(lx + 6, base - 41, 6, 1);
+      // Light pool on the pavement, dithered.
+      for (let x = lx - 6; x < lx + 24; x++) {
+        for (let y = base; y < h; y++) {
+          if ((x + y) & 1) continue;
+          g.fillStyle = COL.steel;
+          g.fillRect(x, y, 1, 1);
+        }
+      }
+    }
   }
   return c;
 }
@@ -477,6 +685,11 @@ function buildPauseIcon() {
   );
 }
 
+// Day phase for a run clock (s): sunset, dusk, twilight, night (stays night).
+export function phaseAt(clock, cfg) {
+  return Math.min(PHASES.length - 1, Math.floor(clock / cfg.render.phaseTime));
+}
+
 // 50% ink checkerboard, used to dim the scene behind menus.
 function buildChecker(w, h) {
   const c = makeCanvas(w, h);
@@ -513,8 +726,11 @@ export function buildSprites(cfg) {
     token: buildToken(),
     boardIcon: buildBoardIcon(),
     pauseIcon: buildPauseIcon(),
-    sky: buildSky(cfg.view.maxWidth, groundY),
-    skyline: buildSkyline(512, 80),
+    // Per day phase (see PHASES): index with phaseAt().
+    sky: PHASES.map((p) => buildSky(cfg.view.maxWidth, groundY, p)),
+    skyline: PHASES.map((p) => buildSkyline(512, 80, p)),
+    mid: PHASES.map((p) => buildMid(448, 56, p)),
+    props: [buildProps(320, 56, false), buildProps(320, 56, true)],
     street: buildStreet(),
     checker: buildChecker(cfg.view.maxWidth, cfg.view.height),
   };

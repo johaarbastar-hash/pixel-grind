@@ -178,7 +178,26 @@ export const CONFIG = {
   },
 
   render: {
-    skylineParallax: 0.25, // skyline scroll speed relative to the street
+    skylineParallax: 0.25, // far skyline scroll speed relative to the street
+    midParallax: 0.5, // mid buildings
+    phaseTime: 45, // s of run time per sky phase: sunset, dusk, twilight, night
+    lampFlicker: 1.2, // s the street lamps flicker as they come on at dusk
+    flashPoints: 1000, // one-frame white flash for combos over this
+    particles: 96, // pool size: allocated once, never garbage-collected mid-run
+  },
+
+  crt: {
+    autoScale: 3, // scanline overlay on by default at this scale and up
+  },
+
+  // Skater animation timing (s).
+  anim: {
+    popTime: 0.1, // ollie snap frame at take-off
+    squashTime: 0.1, // squash frame on landing
+    pushEvery: 2.4, // a kick-push this often while cruising
+    pushFrameTime: 0.12,
+    tumbleFrameTime: 0.14, // bail wipeout frames
+    getUpTime: 0.3, // back on the board before the respawn
   },
 
   debug: {

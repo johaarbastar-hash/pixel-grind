@@ -6,7 +6,7 @@
 import { CONFIG } from './config.js';
 import { randomSeed } from './rng.js';
 import { createInput } from './input.js';
-import { createRenderer, drawWorld } from './render.js';
+import { createRenderer, drawWorld, createParticles } from './render.js';
 import { buildSprites, COL } from './sprites.js';
 import { createRun, cloneRun, runPress, runFlip, stepRun } from './run.js';
 import {
@@ -73,7 +73,9 @@ const urlSpeed = intParam('speed');
 const urlSeg = params.get('seg');
 const replay = !!(params.has('tier') || urlSpeed || urlSeg);
 
-const renderer = createRenderer(CONFIG, document.getElementById('screen'), document.getElementById('stage'));
+const crtEl = document.getElementById('crt');
+const renderer = createRenderer(CONFIG, document.getElementById('screen'), document.getElementById('stage'), crtEl);
+const parts = createParticles(CONFIG.render.particles);
 const sprites = buildSprites(CONFIG);
 const input = createInput(CONFIG);
 const debug = createDebug(CONFIG, params.get('debug') === '1');
@@ -118,6 +120,8 @@ const game = {
   pressed: null, // game-over / title button held down
   titleData: null, // scores and stats for the title panels
   installPrompt: null, // Android install prompt, when the browser offers one (M8)
+  flash: 0, // frames of white flash left (big combos)
+  crt: null, // overlay currently shown
 };
 
 function setState(s) {
@@ -150,6 +154,7 @@ function setRun(run) {
   bot.reset();
   clearPopups();
   clearCombo();
+  parts.clear();
 }
 
 // --- Title and demo run ------------------------------------------------------------
@@ -185,6 +190,8 @@ function updateDemo(dt) {
   if (a === 'press') runPress(run, CONFIG);
   else if (a) runFlip(run, a, CONFIG);
   stepRun(run, dt, CONFIG);
+  grindSparks(run);
+  parts.update(dt);
   game.demoTime += dt;
   if (run.over || game.demoTime > CONFIG.attract.restartAfter) newDemoRun();
 }
@@ -275,10 +282,16 @@ function toggleMute() {
   setSetting('muted', isMuted());
 }
 
-// Pause menu (CRT on/off joins it in M7).
+// CRT scanlines: on by default at 3x scale and up, unless switched in the menu.
+function crtOn() {
+  const s = getSetting('crt', null);
+  return s === null ? renderer.scale >= CONFIG.crt.autoScale : s;
+}
+
 const MENU = [
   { label: () => 'RESUME', run: () => resume() },
   { label: () => (isMuted() ? 'SOUND: OFF' : 'SOUND: ON'), run: () => toggleMute() },
+  { label: () => (crtOn() ? 'CRT: ON' : 'CRT: OFF'), run: () => setSetting('crt', !crtOn()) },
   { label: () => 'REPLAY TUTORIAL', run: () => startRun(true) },
   { label: () => 'QUIT', run: () => toTitle() },
 ];
@@ -489,6 +502,41 @@ const tuning = createTuningPanel(CONFIG, {
 });
 tuning.setButtonVisible(debug.enabled);
 
+// --- Particles: dust, sparks, sparkle, debris --------------------------------------
+// Visual only, so Math.random is fine here (gameplay randomness is seeded).
+
+const DUST = [COL.steel, COL.cream, COL.slate];
+const SPARKS = [COL.gold, COL.white, COL.orange];
+const TOKEN_SPARKLE = [COL.gold, COL.cream, COL.white];
+const DEBRIS = [COL.rose, COL.teal, COL.gold, COL.indigo];
+const pick = (list) => list[Math.floor(Math.random() * list.length)];
+const skaterCentreX = (run) => run.world.distance + CONFIG.world.skaterX + CONFIG.skater.spriteW / 2;
+
+function burst(x, y, n, speed, life, colours, grav) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const v = speed * (0.4 + Math.random() * 0.6);
+    parts.spawn(x, y, Math.cos(a) * v, Math.sin(a) * v, life * (0.6 + Math.random() * 0.4), pick(colours), grav);
+  }
+}
+
+// Puffs either side of the wheels on landing.
+function dust(run) {
+  const x = skaterCentreX(run);
+  const y = run.player.y - 1;
+  for (let i = 0; i < 6; i++) {
+    const side = i % 2 ? 1 : -1;
+    parts.spawn(x + side * 5, y, side * (20 + Math.random() * 40), -10 - Math.random() * 20, 0.3 + Math.random() * 0.2, pick(DUST), 40);
+  }
+}
+
+// Sparks off the trucks while grinding; they fly back as the world scrolls.
+function grindSparks(run) {
+  if (!run.player.grinding || run.ticks % 2) return;
+  const x = run.world.distance + CONFIG.world.skaterX + (Math.random() < 0.5 ? 4 : 12);
+  parts.spawn(x, run.player.y, -20 + Math.random() * 30, -30 - Math.random() * 50, 0.25 + Math.random() * 0.15, pick(SPARKS), 400);
+}
+
 // --- Run events: sounds, haptics, popups ------------------------------------------
 // Trick names show in the combo chain (drawCombo); popups are for results.
 
@@ -516,14 +564,17 @@ function handleRunEvents(run) {
         break;
       case 'token':
         playSfx('token');
+        burst(e.x, e.y, 6, 50, 0.3, TOKEN_SPARKLE, 0);
         break;
       case 'land':
         playSfx(e.result === 'sketchy' ? 'sketchy' : 'land');
+        dust(run);
         if (e.tricks > 0) {
           playSfx('combo', { points: e.points });
           if (e.result === 'sketchy') holdCombo(e.chain, 'SKETCHY! +' + e.points, COL.orange, renderer.width);
           else holdCombo(e.chain, '+' + e.points, COL.mint, renderer.width);
           if (e.points > CONFIG.haptics.bigComboPoints) vibrate(CONFIG.haptics.bigCombo);
+          if (e.points > CONFIG.render.flashPoints) game.flash = 1;
         }
         break;
       case 'bail':
@@ -531,6 +582,7 @@ function handleRunEvents(run) {
         vibrate(CONFIG.haptics.bail);
         stopMusic();
         grindLoop(false);
+        burst(skaterCentreX(run), run.player.y - 10, 10, 90, 0.5, DEBRIS, 300);
         if (!run.over) addPopup('BAIL!', COL.rose);
         break;
       case 'respawn':
@@ -619,6 +671,7 @@ function tick(dt) {
       stepRun(game.run, dt, CONFIG); // the last bail slides to a stop
       updatePopups(dt, CONFIG);
       updateCombo(dt, CONFIG);
+      parts.update(dt);
       break;
     case 'play': {
       applyDebug(game.run);
@@ -630,6 +683,8 @@ function tick(dt) {
       setMusicTier(game.run.world.tier);
       updatePopups(dt, CONFIG);
       updateCombo(dt, CONFIG);
+      grindSparks(game.run);
+      parts.update(dt);
       if (game.tutorial) updateTutorial(dt);
       else if (game.run.over && game.run.downTime >= CONFIG.bail.gameOverDelay) gameOver();
       break;
@@ -652,7 +707,7 @@ function render() {
     drawBootScreen(g, W, H, game.stateTime, CONFIG);
   } else {
     const run = game.run;
-    drawWorld(g, W, run, sprites, CONFIG);
+    drawWorld(g, W, run, sprites, CONFIG, parts);
     if (debug.enabled) drawHitboxes(g, W, run);
     if (game.state === 'start') {
       const panel = Math.floor(game.stateTime / CONFIG.attract.panelTime) % TITLE_PANELS;
@@ -683,8 +738,19 @@ function render() {
       }
     }
   }
+  // One-frame white flash on big combos.
+  if (game.flash > 0) {
+    g.fillStyle = COL.white;
+    g.fillRect(0, 0, W, H);
+    game.flash--;
+  }
   if (debug.enabled) debug.draw(g, W, debugLines);
   renderer.present();
+  const crt = crtOn();
+  if (crt !== game.crt) {
+    game.crt = crt;
+    crtEl.classList.toggle('on', crt);
+  }
 }
 
 function segmentAhead(run) {

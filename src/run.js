@@ -14,7 +14,7 @@
 //   { type: 'land', result, points, tricks, chain }   combo banked on the ground
 //   { type: 'bail', reason }                   went down
 //   { type: 'respawn' }
-//   { type: 'token' }                          picked up a token
+//   { type: 'token', x, y }                    picked up a token
 //   { type: 'extraBoard' }
 
 import { createRng } from './rng.js';
@@ -239,7 +239,7 @@ function collectTokens(run, hb, cfg) {
     if (t.x + half > hb.x && t.y + half > hb.y && t.y - half < hb.y + hb.h) {
       list.splice(i--, 1);
       run.tokenPoints += cfg.tokens.points;
-      run.events.push({ type: 'token' });
+      run.events.push({ type: 'token', x: t.x, y: t.y });
     }
   }
 }

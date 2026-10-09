@@ -42,6 +42,7 @@ export function createPlayer(cfg) {
     buffer: 0, // s left on a buffered ollie
     pendingFlip: null, // swiped on a kicker: starts at launch
     airTime: 0,
+    rollTime: 1, // s on the ground since landing (animation only)
     flip: null, // trick spinning now
     flipTime: 0, // s into the current flip
     flipDur: 0,
@@ -152,6 +153,7 @@ function land(p, cfg, rail, floorY, ramp) {
     p.y = floorY;
     p.onGround = true;
     p.ramp = ramp;
+    p.rollTime = 0;
   }
   if (p.bailed) {
     p.flip = null;
@@ -196,7 +198,8 @@ function updateGrind(p, dt, cfg, env) {
   }
 }
 
-function updateRolling(p, cfg, env) {
+function updateRolling(p, dt, cfg, env) {
+  p.rollTime += dt;
   const floor = env.floor();
   if (floor === null) {
     leaveSurface(p, cfg); // rolled into a gap
@@ -248,7 +251,7 @@ export function updatePlayer(p, dt, cfg, env) {
   p.anim += dt;
   if (p.bailed) p.bailTime += dt;
   if (p.grinding) updateGrind(p, dt, cfg, env);
-  else if (p.onGround) updateRolling(p, cfg, env);
+  else if (p.onGround) updateRolling(p, dt, cfg, env);
   else updateAir(p, dt, cfg, env);
 }
 
