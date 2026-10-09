@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="format-detection" content="telephone=no">
+<title>PIXEL GRIND</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/style.css">
+<script>
+  // On-screen error box. Phones have no console, so every uncaught error and
+  // unhandled promise rejection is printed on top of the game. Lives inline so it
+  // still works if a module fails to load or parse. Tap the box to dismiss it.
+  (function () {
+    var box = null;
+    function show(msg) {
+      if (!box) {
+        box = document.createElement('pre');
+        box.id = 'errbox';
+        box.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+        box.addEventListener('pointerup', function (e) { e.stopPropagation(); });
+        box.addEventListener('click', function (e) {
+          e.stopPropagation();
+          if (box) { box.remove(); box = null; }
+        });
+        document.documentElement.appendChild(box);
+        box.textContent = 'ERROR (tap to dismiss)\n';
+      }
+      box.textContent += '\n' + msg + '\n';
+    }
+    window.__showError = show;
+    window.addEventListener('error', function (e) {
+      var t = e.target;
+      if (t && t !== window && t.tagName) {
+        show('Failed to load ' + t.tagName.toLowerCase() + ': ' + (t.src || t.href || '?'));
+        return;
+      }
+      var where = (e.filename || '?') + ':' + (e.lineno || 0) + ':' + (e.colno || 0);
+      var stack = e.error && e.error.stack ? '\n' + e.error.stack : '';
+      show((e.message || 'Error') + '\n  at ' + where + stack);
+    }, true);
+    window.addEventListener('unhandledrejection', function (e) {
+      var r = e.reason;
+      show('Unhandled promise rejection: ' + (r && r.stack ? r.stack : String(r)));
+    });
+  })();
+</script>
+</head>
+<body>
+<div id="stage"><canvas id="screen"></canvas></div>
+<script nomodule>window.__showError('This browser is too old to run PIXEL GRIND.');</script>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
