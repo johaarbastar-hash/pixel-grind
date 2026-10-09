@@ -43,6 +43,105 @@ body {
   image-rendering: pixelated;
 }
 
+/* Debug tuning panel (src/tuning.js). */
+#tune-btn {
+  position: fixed;
+  z-index: 800;
+  left: calc(env(safe-area-inset-left, 0px) + 8px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
+  padding: 6px 10px;
+  background: rgba(13, 11, 26, 0.8);
+  border: 1px solid #7fd6b5;
+  border-radius: 4px;
+  color: #7fd6b5;
+  font: bold 12px ui-monospace, Menlo, Consolas, monospace;
+}
+
+#tune {
+  position: fixed;
+  z-index: 900;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(380px, 92vw);
+  padding: 0 12px calc(env(safe-area-inset-bottom, 0px) + 16px);
+  padding-right: calc(env(safe-area-inset-right, 0px) + 12px);
+  box-sizing: border-box;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  background: rgba(13, 11, 26, 0.95);
+  color: #fff1d0;
+  font: 13px/1.3 ui-monospace, Menlo, Consolas, monospace;
+}
+
+#tune[hidden],
+#tune-btn[hidden],
+.tune-fallback[hidden] {
+  display: none;
+}
+
+.tune-head {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 10px 0 8px;
+  background: rgba(13, 11, 26, 0.98);
+}
+
+.tune-head b {
+  margin-right: auto;
+  color: #ffc857;
+}
+
+.tune-head button {
+  padding: 6px 8px;
+  background: #33306b;
+  border: 1px solid #8a95b5;
+  border-radius: 4px;
+  color: #fff1d0;
+  font: inherit;
+}
+
+.tune-status {
+  flex-basis: 100%;
+  min-height: 1em;
+  color: #7fd6b5;
+}
+
+.tune-section {
+  margin: 12px 0 4px;
+  color: #e0566b;
+  font-weight: bold;
+}
+
+.tune-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  padding: 4px 0;
+}
+
+.tune-row.changed span {
+  color: #ffc857;
+}
+
+.tune-row input {
+  grid-column: 1 / -1;
+  width: 100%;
+  margin: 0;
+}
+
+.tune-fallback {
+  width: 100%;
+  height: 160px;
+  margin-top: 12px;
+  font: 11px ui-monospace, Menlo, Consolas, monospace;
+}
+
 #errbox {
   position: fixed;
   z-index: 1000;

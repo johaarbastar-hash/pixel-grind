@@ -24,17 +24,71 @@ export function drawStartScreen(g, W, H, t, touch, build, cfg) {
   if (blinkOn(t, cfg)) {
     drawText(g, touch ? 'TAP TO START' : 'SPACE OR CLICK TO START', cx, 84, COL.cream, { align: 'center', shadow: COL.ink });
   }
-  drawText(g, touch ? 'TAP TO OLLIE THE CONES' : 'SPACE TO OLLIE THE CONES', cx, 100, COL.mint, { align: 'center', shadow: COL.ink });
+  drawText(g, touch ? 'TAP TO OLLIE' : 'SPACE TO OLLIE', cx, 100, COL.mint, { align: 'center', shadow: COL.ink });
+  drawText(g, touch ? 'SWIPE TO FLIP' : 'ARROWS TO FLIP', cx, 110, COL.mint, { align: 'center', shadow: COL.ink });
   drawText(g, 'BUILD ' + build, W - 4, H - 10, COL.steel, { align: 'right' });
 }
 
-export function drawDeadScreen(g, W, H, t, score, canRetry, touch, sprites, cfg) {
+const BAIL_REASON = {
+  obstacle: 'HIT AN OBSTACLE',
+  flip: 'LANDED MID-FLIP',
+};
+
+export function drawDeadScreen(g, W, H, t, score, reason, canRetry, touch, sprites, cfg) {
   const cx = W >> 1;
   g.drawImage(sprites.checker, 0, 0);
-  drawText(g, 'BAIL!', cx, 44, COL.rose, { align: 'center', scale: 2, shadow: COL.ink });
-  drawText(g, 'SCORE ' + score, cx, 72, COL.cream, { align: 'center', shadow: COL.ink });
+  drawText(g, 'BAIL!', cx, 40, COL.rose, { align: 'center', scale: 2, shadow: COL.ink });
+  drawText(g, BAIL_REASON[reason] || '', cx, 62, COL.steel, { align: 'center', shadow: COL.ink });
+  drawText(g, 'SCORE ' + score, cx, 78, COL.cream, { align: 'center', shadow: COL.ink });
   if (canRetry && blinkOn(t, cfg)) {
-    drawText(g, touch ? 'TAP TO RETRY' : 'SPACE TO RETRY', cx, 96, COL.gold, { align: 'center', shadow: COL.ink });
+    drawText(g, touch ? 'TAP TO RETRY' : 'SPACE TO RETRY', cx, 100, COL.gold, { align: 'center', shadow: COL.ink });
+  }
+}
+
+// --- Trick popups ------------------------------------------------------------
+// Fixed pool; newest sits lowest and older ones stack above it.
+
+const POPUPS = Array.from({ length: 4 }, () => ({ text: '', color: '', age: 0, active: false }));
+const POPUP_Y = 58;
+const POPUP_SPACING = 10;
+
+export function addPopup(text, color) {
+  let slot = POPUPS[0];
+  for (const p of POPUPS) {
+    if (!p.active) {
+      slot = p;
+      break;
+    }
+    if (p.age > slot.age) slot = p;
+  }
+  slot.text = text;
+  slot.color = color;
+  slot.age = 0;
+  slot.active = true;
+}
+
+export function clearPopups() {
+  for (const p of POPUPS) p.active = false;
+}
+
+export function updatePopups(dt, cfg) {
+  for (const p of POPUPS) {
+    if (!p.active) continue;
+    p.age += dt;
+    if (p.age >= cfg.ui.popupTime) p.active = false;
+  }
+}
+
+export function drawPopups(g, W, cfg) {
+  const life = cfg.ui.popupTime;
+  for (const p of POPUPS) {
+    if (!p.active) continue;
+    // Blink out over the last 20% of its life.
+    if (p.age > life * 0.8 && Math.floor(p.age * 16) % 2 === 1) continue;
+    let rank = 0;
+    for (const q of POPUPS) if (q.active && q.age < p.age) rank++;
+    const y = POPUP_Y - rank * POPUP_SPACING - Math.floor((p.age / life) * cfg.ui.popupRise);
+    drawText(g, p.text, W >> 1, y, p.color, { align: 'center', shadow: COL.ink });
   }
 }
 

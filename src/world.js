@@ -24,7 +24,9 @@ export function stopWorld(w, cfg) {
 }
 
 export function updateWorld(w, dt, cfg) {
+  // Constant speed until the M3 speed curve; read live so the tuning panel applies.
   if (w.decel > 0) w.speed = Math.max(0, w.speed - w.decel * dt);
+  else w.speed = cfg.world.startSpeed;
   w.distance += w.speed * dt;
   if (w.spawn) spawnAhead(w, cfg);
   cull(w, cfg);

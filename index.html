@@ -21,6 +21,7 @@
       if (!box) {
         box = document.createElement('pre');
         box.id = 'errbox';
+        box.setAttribute('data-ui', '');
         box.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
         box.addEventListener('pointerup', function (e) { e.stopPropagation(); });
         box.addEventListener('click', function (e) {

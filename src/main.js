@@ -1,17 +1,29 @@
 // Fixed-timestep loop and the state machine.
-// States (M1): start -> play -> dead -> play ..., plus paused.
+// States: start -> play -> dead -> play ..., plus paused.
 // Portrait on a phone overrides everything with the rotate screen.
 
 import { CONFIG } from './config.js';
 import { randomSeed } from './rng.js';
 import { createInput } from './input.js';
 import { createRenderer, drawWorld } from './render.js';
-import { buildSprites } from './sprites.js';
-import { createRun, runPress, stepRun } from './run.js';
-import { drawHud, drawStartScreen, drawDeadScreen, drawPausedScreen, drawRotateScreen } from './ui.js';
+import { buildSprites, COL } from './sprites.js';
+import { createRun, runPress, runFlip, stepRun } from './run.js';
+import {
+  drawHud,
+  drawStartScreen,
+  drawDeadScreen,
+  drawPausedScreen,
+  drawRotateScreen,
+  addPopup,
+  clearPopups,
+  updatePopups,
+  drawPopups,
+} from './ui.js';
 import { createDebug, drawHitboxes, reportError } from './debug.js';
 import { isPortrait, isTouchDevice, enterFullscreenLandscape } from './device.js';
 import { unlockAudio } from './audio.js';
+import { createTuningPanel } from './tuning.js';
+import { TRICK_NAMES } from './tricks.js';
 
 /* global __BUILD_ID__ */
 const BUILD = typeof __BUILD_ID__ !== 'undefined' ? __BUILD_ID__ : 'DEV';
@@ -23,7 +35,7 @@ const urlSeed = params.has('seed') ? Number.parseInt(params.get('seed'), 10) >>>
 
 const renderer = createRenderer(CONFIG, document.getElementById('screen'), document.getElementById('stage'));
 const sprites = buildSprites(CONFIG);
-const input = createInput();
+const input = createInput(CONFIG);
 const debug = createDebug(CONFIG, params.get('debug') === '1');
 
 const game = {
@@ -44,6 +56,7 @@ function setState(s) {
 
 function startRun() {
   game.run = createRun(CONFIG, urlSeed ?? randomSeed(), { spawn: true });
+  clearPopups();
   setState('play');
 }
 
@@ -55,9 +68,32 @@ function resume() {
   if (game.state === 'paused') setState('play');
 }
 
+// Opening the panel pauses; tap the game area to play on with it open.
+const tuning = createTuningPanel(CONFIG, { onOpen: pause });
+tuning.setButtonVisible(debug.enabled);
+
+function handleRunEvents(run) {
+  const evs = run.events;
+  for (let i = 0; i < evs.length; i++) {
+    const e = evs[i];
+    if (e.type === 'trick') {
+      addPopup(TRICK_NAMES[e.trick], COL.gold);
+    } else if (e.type === 'land' && e.flips > 0) {
+      if (e.result === 'sketchy') addPopup('SKETCHY! +' + e.points, COL.orange);
+      else addPopup('+' + e.points, COL.mint);
+    }
+  }
+  evs.length = 0;
+}
+
 function handleAction(a) {
   if (a === 'debug') {
     debug.toggle();
+    tuning.setButtonVisible(debug.enabled);
+    return;
+  }
+  if (a === 'tune') {
+    if (debug.enabled) tuning.toggle();
     return;
   }
   if (a === 'pause') {
@@ -69,12 +105,13 @@ function handleAction(a) {
 
   if (game.state === 'play') {
     if (a === 'press') runPress(game.run, CONFIG); // ollie on touch-down, same tick
+    else if (a.startsWith('flip')) runFlip(game.run, a, CONFIG);
     return;
   }
 
   // Menu states confirm on release, after a press that happened inside this
   // state. Release is when touch grants fullscreen permission, and a finger
-  // already down when the state changed can't skip the screen.
+  // already down when the state changed can't skip the screen. Flips do nothing.
   if (a === 'press') {
     const lockout = game.state === 'dead' ? CONFIG.bail.retryDelay : 0;
     if (game.stateTime >= lockout) game.armed = true;
@@ -93,15 +130,20 @@ function tick(dt) {
 
   switch (game.state) {
     case 'start':
+      stepRun(game.run, dt, CONFIG);
+      break;
     case 'dead':
       stepRun(game.run, dt, CONFIG);
+      updatePopups(dt, CONFIG);
       break;
     case 'play':
       stepRun(game.run, dt, CONFIG);
+      updatePopups(dt, CONFIG);
       if (game.run.over) setState('dead');
       break;
     // 'paused': frozen
   }
+  handleRunEvents(game.run);
 }
 
 function render() {
@@ -118,9 +160,11 @@ function render() {
       drawStartScreen(g, W, H, game.time, game.touch, BUILD, CONFIG);
     } else {
       drawHud(g, W, game.run.score);
+      drawPopups(g, W, CONFIG);
       if (game.state === 'dead') {
         const canRetry = game.stateTime >= CONFIG.bail.retryDelay;
-        drawDeadScreen(g, W, H, game.stateTime, game.run.score, canRetry, game.touch, sprites, CONFIG);
+        const run = game.run;
+        drawDeadScreen(g, W, H, game.stateTime, run.score, run.bailReason, canRetry, game.touch, sprites, CONFIG);
       } else if (game.state === 'paused') {
         drawPausedScreen(g, W, H, game.stateTime, game.touch, sprites, CONFIG);
       }
@@ -132,16 +176,22 @@ function render() {
 
 function debugLines(d) {
   const run = game.run;
-  return [
+  const p = run.player;
+  const flip = p.flip ? `${p.flip.toUpperCase()} ${p.flipTime.toFixed(2)}/${p.flipDur.toFixed(2)}` : '-';
+  const lines = [
     `FPS ${d.fps.toFixed(0)} FT ${d.ft.toFixed(1)} MAX ${d.ftMax.toFixed(1)}`,
     `CPU ${d.cpu.toFixed(2)} MAX ${d.cpuMax.toFixed(2)}`,
     `RES ${renderer.width}X${renderer.height} ${renderer.scale}X DPR ${renderer.dpr.toFixed(2)}`,
     `SPD ${run.world.speed.toFixed(0)} DIST ${run.world.distance.toFixed(0)}`,
+    `FLIP ${flip} Q ${p.queued ? p.queued.toUpperCase() : '-'}`,
     `TIER - SEG -`,
     `SEED ${run.seed}`,
     `STATE ${game.state.toUpperCase()}`,
     `BUILD ${BUILD}`,
   ];
+  const tuned = tuning.changedCount();
+  if (tuned > 0) lines.push(`TUNED ${tuned} VALUES`);
+  return lines;
 }
 
 // --- Loop -------------------------------------------------------------------
@@ -212,6 +262,7 @@ if (debug.enabled) {
   window.__pixelGrind = {
     game,
     config: CONFIG,
+    tuning,
     step(n = 1) {
       checkPortrait();
       for (let i = 0; i < n; i++) tick(STEP);

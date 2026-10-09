@@ -119,8 +119,17 @@ const LEGS = [
   [COL.white, 10, 20, 3, 1],
 ];
 
-// Dark grip on top, bright underside: flips read at this size.
-function board(wheelA, wheelB) {
+// Knees pulled up while the board flips underneath.
+const TUCK_LEGS = [
+  [COL.indigo, 4, 15, 3, 2],
+  [COL.indigo, 9, 15, 3, 2],
+  [COL.white, 3, 17, 3, 1],
+  [COL.white, 10, 17, 3, 1],
+];
+
+// Board frames, rows 20-23 of the 16 x 24 skater sprite. Dark grip on top,
+// bright underside, so flips read at this size.
+function boardFlat(wheelA = COL.cream, wheelB = COL.cream) {
   return [
     [COL.ink, 0, 20, 1, 1], // tail kick
     [COL.ink, 15, 20, 1, 1], // nose kick
@@ -133,14 +142,80 @@ function board(wheelA, wheelB) {
   ];
 }
 
+const BOARD = {
+  flat: boardFlat(),
+  upsideDown: [
+    [COL.cream, 3, 20, 2, 1],
+    [COL.cream, 11, 20, 2, 1],
+    [COL.gold, 1, 21, 14, 1],
+    [COL.ink, 1, 22, 14, 1],
+    [COL.ink, 0, 23, 1, 1],
+    [COL.ink, 15, 23, 1, 1],
+  ],
+  // On its edge, showing the underside / the grip (barrel roll).
+  edgeUnder: [
+    [COL.gold, 1, 20, 14, 3],
+    [COL.steel, 3, 21, 2, 1],
+    [COL.steel, 11, 21, 2, 1],
+  ],
+  edgeGrip: [
+    [COL.ink, 1, 20, 14, 3],
+    [COL.slate, 2, 21, 12, 1],
+  ],
+  // Turned 45 / 90 degrees (shove-it spin), seen from the side.
+  half: [
+    [COL.ink, 4, 20, 1, 1],
+    [COL.ink, 11, 20, 1, 1],
+    [COL.ink, 5, 21, 6, 1],
+    [COL.gold, 5, 22, 6, 1],
+    [COL.cream, 6, 23, 1, 1],
+    [COL.cream, 9, 23, 1, 1],
+  ],
+  end: [
+    [COL.ink, 6, 21, 4, 1],
+    [COL.gold, 6, 22, 4, 1],
+    [COL.cream, 6, 23, 1, 1],
+    [COL.cream, 9, 23, 1, 1],
+  ],
+  endUpsideDown: [
+    [COL.cream, 6, 20, 1, 1],
+    [COL.cream, 9, 20, 1, 1],
+    [COL.gold, 6, 21, 4, 1],
+    [COL.ink, 6, 22, 4, 1],
+  ],
+  halfEdgeUnder: [
+    [COL.gold, 5, 20, 6, 3],
+    [COL.steel, 6, 21, 1, 1],
+    [COL.steel, 9, 21, 1, 1],
+  ],
+  halfEdgeGrip: [
+    [COL.ink, 5, 20, 6, 3],
+    [COL.slate, 6, 21, 4, 1],
+  ],
+};
+
+// Placeholder flip animations (final frames in M7).
+const FLIP_FRAMES = {
+  kickflip: ['flat', 'edgeUnder', 'upsideDown', 'edgeGrip', 'flat'],
+  heelflip: ['flat', 'edgeGrip', 'upsideDown', 'edgeUnder', 'flat'],
+  shoveit: ['half', 'end', 'half', 'flat'],
+  treflip: ['half', 'halfEdgeUnder', 'endUpsideDown', 'halfEdgeGrip', 'half', 'flat'],
+};
+
 function buildSkater() {
   const body = [...HEAD, ...TORSO, ...ARMS_DOWN, ...LEGS];
+  const tuck = [...HEAD, ...TORSO, ...ARMS_UP, ...TUCK_LEGS];
+  const flips = {};
+  for (const trick of Object.keys(FLIP_FRAMES)) {
+    flips[trick] = FLIP_FRAMES[trick].map((f) => sprite(16, 24, tuck, BOARD[f]));
+  }
   return {
     ride: [
-      sprite(16, 24, body, board(COL.cream, COL.steel)),
-      sprite(16, 24, body, board(COL.steel, COL.cream)),
+      sprite(16, 24, body, boardFlat(COL.cream, COL.steel)),
+      sprite(16, 24, body, boardFlat(COL.steel, COL.cream)),
     ],
-    air: sprite(16, 24, [...HEAD, ...TORSO, ...ARMS_UP, ...LEGS], board(COL.cream, COL.cream)),
+    air: sprite(16, 24, [...HEAD, ...TORSO, ...ARMS_UP, ...LEGS], BOARD.flat),
+    flips,
     // Lying on the ground after a bail (24 x 10, bottom row on the ground).
     bail: sprite(24, 10, [
       [COL.white, 1, 5, 1, 3], // shoes

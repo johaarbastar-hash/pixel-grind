@@ -32,8 +32,26 @@ export const CONFIG = {
 
   timing: {
     jumpBuffer: 0.12, // s: a tap in the air this close to landing ollies on landing
-    lateLandingGrace: 0.06, // s (M2)
+    lateLandingGrace: 0.06, // s: land with this much flip left (or less) = SKETCHY; more = bail
     coyoteTime: 0.08, // s (M3)
+  },
+
+  input: {
+    swipeDistance: 20, // CSS px the finger must move to count as a swipe
+    swipeTime: 0.25, // s after touch-down within which the move must happen
+  },
+
+  // Flip duration (s) and points per trick.
+  tricks: {
+    ollie: { points: 10 },
+    kickflip: { duration: 0.35, points: 100 },
+    heelflip: { duration: 0.35, points: 100 },
+    shoveit: { duration: 0.3, points: 80 },
+    treflip: { duration: 0.45, points: 250 },
+  },
+
+  landing: {
+    sketchyBank: 0.5, // fraction of the combo banked on a sketchy landing
   },
 
   skater: {
@@ -72,6 +90,8 @@ export const CONFIG = {
     blinkPeriod: 0.5, // s per on/off phase of blinking prompts
     rollFrameTime: 0.12, // s per rolling animation frame
     rotateFrameTime: 0.8, // s per frame of the rotate-your-phone animation
+    popupTime: 1.0, // s a trick-name popup stays up
+    popupRise: 6, // px a popup drifts up over its life
   },
 
   render: {

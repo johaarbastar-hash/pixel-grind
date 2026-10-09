@@ -144,7 +144,13 @@ function drawSkater(g, p, sk, cfg) {
     const w = Math.max(4, 12 - Math.floor((groundY - y) / 4));
     g.fillStyle = COL.ink;
     g.fillRect(x + 8 - (w >> 1), groundY, w, 1);
-    g.drawImage(sk.air, x, y - cfg.skater.spriteH);
+    let img = sk.air;
+    if (p.flip) {
+      const frames = sk.flips[p.flip];
+      const i = Math.floor((p.flipTime / p.flipDur) * frames.length);
+      img = frames[Math.max(0, Math.min(frames.length - 1, i))];
+    }
+    g.drawImage(img, x, y - cfg.skater.spriteH);
     return;
   }
 
