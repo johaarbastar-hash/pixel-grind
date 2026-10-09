@@ -32,6 +32,9 @@ export function createInput(cfg) {
     // Called synchronously inside events that grant user activation, for things
     // browsers only allow then (fullscreen, orientation lock, audio unlock).
     onGesture: null,
+    // (clientX, clientY) -> action for an on-screen button there, or null.
+    // Touches that start on a button never ollie or swipe.
+    uiHitTest: null,
     drain() {
       const out = queue;
       queue = spare;
@@ -66,6 +69,11 @@ export function createInput(cfg) {
       if (isUiTarget(e)) return;
       e.preventDefault();
       if (e.pointerType === 'mouse' && e.button !== 0) return;
+      const button = api.uiHitTest && api.uiHitTest(e.clientX, e.clientY);
+      if (button) {
+        push(button);
+        return;
+      }
       touches.set(e.pointerId, { x: e.clientX, y: e.clientY, t: e.timeStamp, done: false });
       push('press');
       // Mouse presses grant user activation; touch only does on release.

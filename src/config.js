@@ -100,13 +100,40 @@ export const CONFIG = {
 
   score: {
     pxPerPoint: 10, // distance score: 1 point per this many px travelled
+    // Points for a trick's 1st, 2nd, 3rd+ time in the same combo.
+    repeatFactors: [1, 0.5, 0.25],
+  },
+
+  tokens: {
+    points: 50, // added straight to the score
+    size: 8, // px, pickup box
+    spacing: 20, // px between tokens along a rail or ledge
+    arc: [0.3, 0.5, 0.7], // fractions of ollie airtime: tokens along the arc over an obstacle
+    kickerArc: [0.4, 0.5, 0.6], // fractions of kicker airtime: tokens around the kicker apex
+    spinFrameTime: 0.1, // s per spin frame
+  },
+
+  lives: {
+    start: 3, // boards
+    max: 5,
+    extraEvery: 10000, // points per extra board
   },
 
   bail: {
+    freeze: 0.05, // s of freeze frame on impact
+    shakeTime: 0.15, // s of screen shake
+    shakePx: 3, // px
     slideTime: 0.4, // s for the world to slide to a stop after a bail
+    respawnDelay: 1.5, // s from bail to respawn
+    clearAhead: 200, // px of world cleared ahead of the skater on respawn
+    invulnerable: 1.0, // s of invulnerability after respawn (skater blinks)
+    speedLoss: 0.15, // speed drops by this fraction on a bail...
+    speedRecover: 5, // ...and recovers over this many s
+    gameOverDelay: 1.0, // s of the last bail before the game-over screen
     retryDelay: 0.5, // s before a tap can restart (stops accidental restarts)
     boardSlideSpeed: 60, // px/s the board skids ahead after a bail
     boardSlideMax: 40, // px
+    blinkRate: 12, // invulnerability blinks per s
   },
 
   tutorial: {

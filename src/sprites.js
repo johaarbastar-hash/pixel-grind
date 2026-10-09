@@ -439,6 +439,44 @@ function buildStreet() {
   return c;
 }
 
+// Pixel rows to a canvas: each char maps to a colour, '.' is transparent.
+function fromRows(rows, colours) {
+  const c = makeCanvas(rows[0].length, rows.length);
+  const g = c.getContext('2d');
+  rows.forEach((row, y) => {
+    for (let x = 0; x < row.length; x++) {
+      const col = colours[row[x]];
+      if (col) {
+        g.fillStyle = col;
+        g.fillRect(x, y, 1, 1);
+      }
+    }
+  });
+  return c;
+}
+
+// Spinning token: 4 frames (face, turning, edge, turning back).
+function buildToken() {
+  const colours = { o: COL.orange, g: COL.gold, c: COL.cream };
+  const face = ['..oooo..', '.oggggo.', 'oggcgggo', 'oggcgggo', 'oggcgggo', 'oggcgggo', '.oggggo.', '..oooo..'];
+  const turnA = ['...oo...', '..oggo..', '.ogcggo.', '.ogcggo.', '.ogcggo.', '.ogcggo.', '..oggo..', '...oo...'];
+  const edge = ['...oo...', '...og...', '...og...', '...og...', '...og...', '...og...', '...og...', '...oo...'];
+  const turnB = ['...oo...', '..oggo..', '.oggcgo.', '.oggcgo.', '.oggcgo.', '.oggcgo.', '..oggo..', '...oo...'];
+  return [face, turnA, edge, turnB].map((rows) => fromRows(rows, colours));
+}
+
+// HUD icons: one board per life, and the pause button.
+function buildBoardIcon() {
+  return fromRows(['c.......c', '.ccccccc.', '.rrrrrrr.', '..s...s..'], { c: COL.cream, r: COL.rose, s: COL.steel });
+}
+
+function buildPauseIcon() {
+  return fromRows(
+    ['sssssssssss', 's.........s', 's..cc.cc..s', 's..cc.cc..s', 's..cc.cc..s', 's..cc.cc..s', 's..cc.cc..s', 's.........s', 'sssssssssss'],
+    { s: COL.steel, c: COL.cream, '.': null },
+  );
+}
+
 // 50% ink checkerboard, used to dim the scene behind menus.
 function buildChecker(w, h) {
   const c = makeCanvas(w, h);
@@ -472,6 +510,9 @@ export function buildSprites(cfg) {
   return {
     skater: buildSkater(),
     obstacle,
+    token: buildToken(),
+    boardIcon: buildBoardIcon(),
+    pauseIcon: buildPauseIcon(),
     sky: buildSky(cfg.view.maxWidth, groundY),
     skyline: buildSkyline(512, 80),
     street: buildStreet(),

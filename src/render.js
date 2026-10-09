@@ -94,6 +94,15 @@ export function createRenderer(cfg, canvas, stage) {
     display.drawImage(buf, 0, 0, buf.width, H, 0, 0, canvas.width, canvas.height);
   }
 
+  // Page (CSS) coordinates to internal pixels, for on-screen buttons.
+  const point = { x: 0, y: 0 };
+  r.toInternal = (clientX, clientY) => {
+    const rect = canvas.getBoundingClientRect();
+    point.x = ((clientX - rect.left) * r.width) / rect.width;
+    point.y = ((clientY - rect.top) * H) / rect.height;
+    return point;
+  };
+
   return r;
 }
 
@@ -105,9 +114,23 @@ function drawTiled(g, img, offset, y, W) {
   for (; x < W; x += tw) g.drawImage(img, x, y);
 }
 
+// Screen shake in whole pixels, alternating sides, fading out.
+function shakeOffset(run, cfg) {
+  if (run.shake <= 0) return 0;
+  const amp = Math.ceil((cfg.bail.shakePx * run.shake) / cfg.bail.shakeTime);
+  return Math.floor(run.shake * 60) % 2 ? amp : -amp;
+}
+
 export function drawWorld(g, W, run, sprites, cfg) {
   const groundY = cfg.world.groundY;
   const camX = Math.round(run.world.distance); // rounded once per frame
+  const shake = shakeOffset(run, cfg);
+  if (shake) {
+    g.fillStyle = COL.ink;
+    g.fillRect(0, 0, W, cfg.view.height);
+    g.save();
+    g.translate(shake, shake > 0 ? -1 : 1);
+  }
 
   g.drawImage(sprites.sky, 0, 0);
   drawTiled(g, sprites.skyline, Math.round(run.world.distance * cfg.render.skylineParallax), groundY - sprites.skyline.height, W);
@@ -122,7 +145,20 @@ export function drawWorld(g, W, run, sprites, cfg) {
     g.drawImage(sprites.obstacle(ob), sx, ob.y);
   }
 
-  drawSkater(g, run.player, sprites.skater, cfg);
+  const tokens = run.world.tokens;
+  const spin = sprites.token[Math.floor(run.time / cfg.tokens.spinFrameTime) % sprites.token.length];
+  const half = cfg.tokens.size / 2;
+  for (let i = 0; i < tokens.length; i++) {
+    const sx = tokens[i].x - half - camX;
+    if (sx >= W) break;
+    if (sx > -cfg.tokens.size) g.drawImage(spin, sx, tokens[i].y - half);
+  }
+
+  // Blinks while invulnerable after a respawn.
+  if (!(run.invuln > 0 && Math.floor(run.invuln * cfg.bail.blinkRate) % 2 === 1)) {
+    drawSkater(g, run.player, sprites.skater, cfg);
+  }
+  if (shake) g.restore();
 }
 
 function drawSkater(g, p, sk, cfg) {

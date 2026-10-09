@@ -1,17 +1,78 @@
-// HUD and full-screen prompts (title, bail, pause, rotate).
+// HUD and full-screen prompts (title, game over, pause, rotate), combo chain,
+// popups.
 
-import { drawText } from './font.js';
+import { drawText, CHAR_W } from './font.js';
 import { COL } from './sprites.js';
+import { multiplier, comboValue } from './score.js';
+import { TRICK_NAMES } from './tricks.js';
 
+// --- HUD ---------------------------------------------------------------------
+// Score top-left, hi-score top-centre, pause button in the top-right corner
+// with the board icons just left of it. Strings are rebuilt only on change.
+
+const pad = (n) => String(n).padStart(6, '0');
 let hudScore = -1;
 let hudText = '';
+let hudHi = -1;
+let hudHiText = '';
 
-export function drawHud(g, W, score) {
-  if (score !== hudScore) {
-    hudScore = score;
-    hudText = String(score).padStart(6, '0');
+// The pause button's touch area is much bigger than its icon (internal px
+// from the top-right corner), so it is easy to hit without looking.
+const PAUSE_HIT_W = 30;
+const PAUSE_HIT_H = 22;
+
+export function hitPauseButton(x, y, W) {
+  return x >= W - PAUSE_HIT_W && x <= W && y >= 0 && y <= PAUSE_HIT_H;
+}
+
+export function drawHud(g, W, run, best, sprites) {
+  if (run.score !== hudScore) {
+    hudScore = run.score;
+    hudText = pad(run.score);
+  }
+  const hi = Math.max(best, run.score);
+  if (hi !== hudHi) {
+    hudHi = hi;
+    hudHiText = 'HI ' + pad(hi);
   }
   drawText(g, hudText, 4, 4, COL.cream, { shadow: COL.ink });
+  drawText(g, hudHiText, W >> 1, 4, COL.steel, { align: 'center', shadow: COL.ink });
+  const icon = sprites.pauseIcon;
+  g.drawImage(icon, W - icon.width - 3, 3);
+  const b = sprites.boardIcon;
+  for (let i = 0; i < run.boards; i++) g.drawImage(b, W - icon.width - 8 - (i + 1) * (b.width + 2), 6);
+}
+
+// --- Combo chain ---------------------------------------------------------------
+// While a combo is live: the trick chain ("KICKFLIP + GRIND") and its value
+// with the multiplier ("220 x2").
+
+let comboLen = -1;
+let comboPts = -1;
+let comboLine1 = '';
+let comboLine2 = '';
+
+export function drawCombo(g, W, s) {
+  if (!s.live || s.comboTricks === 0) return;
+  const value = comboValue(s);
+  if (s.chain.length !== comboLen || value !== comboPts) {
+    comboLen = s.chain.length;
+    comboPts = value;
+    const maxChars = Math.floor((W - 16) / CHAR_W);
+    let line = TRICK_NAMES[s.chain[s.chain.length - 1]];
+    for (let i = s.chain.length - 2; i >= 0; i--) {
+      const next = TRICK_NAMES[s.chain[i]] + ' + ' + line;
+      if (next.length > maxChars - 4) {
+        line = '... ' + line;
+        break;
+      }
+      line = next;
+    }
+    comboLine1 = line;
+    comboLine2 = value + ' x' + multiplier(s);
+  }
+  drawText(g, comboLine1, W >> 1, 38, COL.cream, { align: 'center', shadow: COL.ink });
+  drawText(g, comboLine2, W >> 1, 48, COL.gold, { align: 'center', shadow: COL.ink });
 }
 
 function blinkOn(t, cfg) {
@@ -44,14 +105,16 @@ export function drawPrompt(g, W, text) {
   drawText(g, text, W >> 1, 24, COL.gold, { align: 'center', shadow: COL.ink });
 }
 
-export function drawDeadScreen(g, W, H, t, score, reason, canRetry, touch, sprites, cfg) {
+// Game over (full screen with best combo etc. comes in M6).
+export function drawGameOverScreen(g, W, H, t, run, canRetry, touch, sprites, cfg) {
   const cx = W >> 1;
   g.drawImage(sprites.checker, 0, 0);
-  drawText(g, 'BAIL!', cx, 40, COL.rose, { align: 'center', scale: 2, shadow: COL.ink });
-  drawText(g, BAIL_REASON[reason] || '', cx, 62, COL.steel, { align: 'center', shadow: COL.ink });
-  drawText(g, 'SCORE ' + score, cx, 78, COL.cream, { align: 'center', shadow: COL.ink });
+  drawText(g, 'GAME OVER', cx, 36, COL.rose, { align: 'center', scale: 2, shadow: COL.ink });
+  drawText(g, BAIL_REASON[run.bailReason] || '', cx, 58, COL.steel, { align: 'center', shadow: COL.ink });
+  drawText(g, 'SCORE ' + run.score, cx, 74, COL.cream, { align: 'center', shadow: COL.ink });
+  drawText(g, 'BEST COMBO ' + run.tricks.best, cx, 84, COL.cream, { align: 'center', shadow: COL.ink });
   if (canRetry && blinkOn(t, cfg)) {
-    drawText(g, touch ? 'TAP TO RETRY' : 'SPACE TO RETRY', cx, 100, COL.gold, { align: 'center', shadow: COL.ink });
+    drawText(g, touch ? 'TAP TO RETRY' : 'SPACE TO RETRY', cx, 104, COL.gold, { align: 'center', shadow: COL.ink });
   }
 }
 
@@ -59,7 +122,7 @@ export function drawDeadScreen(g, W, H, t, score, reason, canRetry, touch, sprit
 // Fixed pool; newest sits lowest and older ones stack above it.
 
 const POPUPS = Array.from({ length: 4 }, () => ({ text: '', color: '', age: 0, active: false }));
-const POPUP_Y = 58;
+const POPUP_Y = 72;
 const POPUP_SPACING = 10;
 
 export function addPopup(text, color) {

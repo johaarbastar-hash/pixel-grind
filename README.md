@@ -24,6 +24,14 @@ Touching the screen pops; the direction you swipe picks the flip.
 
 Landing with the flip finished is clean; with 60 ms or less of spin left it's SKETCHY (half points); more than that is a bail. On a rail, a sketchy landing just keeps the combo going.
 
+## Scoring and boards
+
+- A combo runs from leaving the ground until landing; grinds keep it alive. Combo = sum of trick points x the number of different tricks (grind counts, ollie doesn't). Repeats in one combo score 50%, then 25%. Clean landing banks it, sketchy banks half, a bail loses it.
+- Tokens sit on the ideal line (along rails, over jumps, at the kicker apex): 50 points each.
+- Distance scores 1 point per 10 px.
+- 3 boards, an extra one every 10,000 points (max 5). A bail costs a board; you respawn after 1.5 s with the road ahead cleared, 1 s of invulnerability and 15% less speed (back to full over 5 s).
+- HUD: score, hi-score, boards and a pause button (top-right; touches there never ollie).
+
 ## Obstacles and difficulty
 
 Obstacles come in hand-authored segments (`src/segments.js`), each tagged with the tier it unlocks at. Tiers unlock by run time (45 / 90 / 150 s) and speed eases from 100 to 200 px/s over 180 s. Spacing inside a segment stretches with speed, and the space between segments is never less than speed x (ollie airtime + 0.4 s). The first run starts with a 30-second tutorial (bails rewind to the last checkpoint).

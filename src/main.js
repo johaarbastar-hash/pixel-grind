@@ -11,7 +11,9 @@ import { createRun, cloneRun, runPress, runFlip, stepRun } from './run.js';
 import {
   drawHud,
   drawStartScreen,
-  drawDeadScreen,
+  drawGameOverScreen,
+  drawCombo,
+  hitPauseButton,
   drawPausedScreen,
   drawRotateScreen,
   drawPrompt,
@@ -24,7 +26,6 @@ import { createDebug, drawHitboxes, reportError } from './debug.js';
 import { isPortrait, isTouchDevice, enterFullscreenLandscape } from './device.js';
 import { unlockAudio } from './audio.js';
 import { createTuningPanel } from './tuning.js';
-import { TRICK_NAMES } from './tricks.js';
 import { SEGMENTS } from './segments.js';
 import { TUTORIAL, tutorialPrompt } from './tutorial.js';
 import { createBot } from './bot.js';
@@ -70,6 +71,7 @@ const game = {
   touch: isTouchDevice(),
   run: createRun(CONFIG, CONFIG.attract.seed, { spawn: false }),
   tutorial: null, // { snap, cp, retry } while the tutorial runs
+  best: getSetting('best', 0), // hi-score (top-10 table comes in M6)
 };
 
 function setState(s) {
@@ -101,6 +103,14 @@ function startRun() {
   setState('play');
 }
 
+function gameOver() {
+  if (game.run.score > game.best) {
+    game.best = game.run.score;
+    setSetting('best', game.best);
+  }
+  setState('dead');
+}
+
 function pause() {
   if (game.state === 'play') setState('paused');
 }
@@ -114,7 +124,7 @@ function resume() {
 function updateTutorial(dt) {
   const tut = game.tutorial;
   const run = game.run;
-  if (run.over) {
+  if (run.down) {
     tut.retry += dt;
     if (tut.retry >= CONFIG.tutorial.retryDelay) {
       setRun(cloneRun(tut.snap, CONFIG));
@@ -179,10 +189,11 @@ function handleRunEvents(run) {
   const evs = run.events;
   for (let i = 0; i < evs.length; i++) {
     const e = evs[i];
-    if (e.type === 'trick') {
-      addPopup(TRICK_NAMES[e.trick], COL.gold);
-    } else if (e.type === 'grind') {
-      addPopup(TRICK_NAMES.grind, COL.mint);
+    // Trick names show in the combo chain (drawCombo); popups are for results.
+    if (e.type === 'bail' && !run.over) {
+      addPopup('BAIL!', COL.rose);
+    } else if (e.type === 'extraBoard') {
+      addPopup('EXTRA BOARD!', COL.mint);
     } else if (e.type === 'land' && e.tricks > 0) {
       if (e.result === 'sketchy') addPopup('SKETCHY! +' + e.points, COL.orange);
       else addPopup('+' + e.points, COL.mint);
@@ -250,7 +261,7 @@ function tick(dt) {
       stepRun(game.run, dt, CONFIG);
       updatePopups(dt, CONFIG);
       if (game.tutorial) updateTutorial(dt);
-      else if (game.run.over) setState('dead');
+      else if (game.run.over && game.run.downTime >= CONFIG.bail.gameOverDelay) gameOver();
       break;
     }
     // 'paused': frozen
@@ -272,15 +283,16 @@ function render() {
     if (game.state === 'start') {
       drawStartScreen(g, W, H, game.time, game.touch, BUILD, CONFIG);
     } else {
-      drawHud(g, W, run.score);
-      if (game.tutorial && !run.over) {
+      drawHud(g, W, run, game.best, sprites);
+      drawCombo(g, W, run.tricks);
+      if (game.tutorial && !run.down) {
         const text = tutorialPrompt(run.world.distance, game.touch);
         if (text) drawPrompt(g, W, text);
       }
       drawPopups(g, W, CONFIG);
       if (game.state === 'dead') {
         const canRetry = game.stateTime >= CONFIG.bail.retryDelay;
-        drawDeadScreen(g, W, H, game.stateTime, run.score, run.bailReason, canRetry, game.touch, sprites, CONFIG);
+        drawGameOverScreen(g, W, H, game.stateTime, run, canRetry, game.touch, sprites, CONFIG);
       } else if (game.state === 'paused') {
         drawPausedScreen(g, W, H, game.stateTime, game.touch, sprites, CONFIG);
       }
@@ -307,6 +319,7 @@ function debugLines(d) {
     `SPD ${run.world.speed.toFixed(0)} DIST ${run.world.distance.toFixed(0)}`,
     `FLIP ${flip} Q ${p.queued ? p.queued.toUpperCase() : '-'}`,
     `TIER ${run.world.tier} SEG ${segmentAhead(run).toUpperCase()}`,
+    `BOARDS ${run.boards} TOKENS ${run.tokenPoints / CONFIG.tokens.points} INV ${run.invuln.toFixed(1)}`,
     `SEED ${run.seed}`,
     `STATE ${game.state.toUpperCase()}${game.tutorial ? ' TUTORIAL' : ''}`,
     `BUILD ${BUILD}`,
@@ -367,6 +380,12 @@ function frame(now) {
 }
 
 // --- Platform hooks ---------------------------------------------------------
+
+input.uiHitTest = (clientX, clientY) => {
+  if (game.state !== 'play' || game.portrait) return null;
+  const p = renderer.toInternal(clientX, clientY);
+  return hitPauseButton(p.x, p.y, renderer.width) ? 'pause' : null;
+};
 
 input.onGesture = () => {
   unlockAudio();

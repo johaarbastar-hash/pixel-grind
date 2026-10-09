@@ -48,7 +48,7 @@ export function createBot(cfg, { flips = false, seed = 1 } = {}) {
       if (canPop(s.player)) popTicks.push(i);
       stepRun(s, dt, cfg);
       spent++;
-      if (s.over) return { safe: false, bailAt: i, popTicks, seg: s.bailSeg };
+      if (s.down) return { safe: false, bailAt: i, popTicks, seg: s.bailSeg };
     }
     return { safe: true, bailAt: Infinity, popTicks, seg: null };
   }
@@ -60,12 +60,12 @@ export function createBot(cfg, { flips = false, seed = 1 } = {}) {
     const start = s.ticks;
     for (let i = 0; i < k; i++) {
       stepRun(s, dt, cfg);
-      if (s.over) break;
+      if (s.down) break;
     }
-    if (!s.over) {
+    if (!s.down) {
       act(s, action, cfg);
       let left = !canPop(s.player);
-      for (let i = 0; i < 240 && !s.over; i++) {
+      for (let i = 0; i < 240 && !s.down; i++) {
         stepRun(s, dt, cfg);
         const can = canPop(s.player);
         if (!can) left = true;
@@ -73,7 +73,7 @@ export function createBot(cfg, { flips = false, seed = 1 } = {}) {
       }
     }
     spent += s.ticks - start;
-    return s.over ? null : s;
+    return s.down ? null : s;
   }
 
   // Returns { k } (ticks to wait before popping; -1 = no pop needed) or null.
@@ -138,7 +138,7 @@ export function createBot(cfg, { flips = false, seed = 1 } = {}) {
     // Call once per tick before stepRun; returns an action or null.
     decide(run) {
       const t = run.ticks;
-      if (run.over) return null;
+      if (run.down) return null;
       if (planTick === t) {
         planTick = -1;
         nextCheck = t + 1;

@@ -86,7 +86,7 @@ function play({ tier, speed, seconds, only = null, seed = seedCounter++ }) {
       lastSeg = ahead.seg;
       passed++;
     }
-    if (run.over) {
+    if (run.down) {
       bails.push({ tier, speed, seed: run.seed, seg: run.bailSeg, reason: run.bailReason, at: run.time.toFixed(1), only: !!only });
       seed = seedCounter++;
       run = createRun(cfg, seed, { spawn: true });

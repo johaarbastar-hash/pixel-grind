@@ -1,10 +1,19 @@
-// One run of the game: world + skater + collisions + score. No DOM access, so
-// the same code drives the real game, the title-screen demo, the bot's
-// lookahead and headless soak tests.
+// One run of the game: world + skater + collisions + score + boards. No DOM
+// access, so the same code drives the real game, the title-screen demo, the
+// bot's lookahead and headless soak tests.
+//
+// Bails: the skater goes down (run.down), loses a board, and respawns after
+// CONFIG.bail.respawnDelay with the road ahead cleared and a moment of
+// invulnerability. With no boards left the run is over (run.over).
+//
 // UI-facing happenings are pushed to run.events (drained by main.js):
-//   { type: 'trick', trick }                       a flip landed in the air
-//   { type: 'grind' }                              locked into a grind
-//   { type: 'land', result, points, tricks }       combo banked on the ground
+//   { type: 'trick', trick }                   a flip landed in the air
+//   { type: 'grind' } { type: 'grindEnd' }     started / stopped grinding
+//   { type: 'land', result, points, tricks }   combo banked on the ground
+//   { type: 'bail', reason }                   went down
+//   { type: 'respawn' }
+//   { type: 'token' }                          picked up a token
+//   { type: 'extraBoard' }
 
 import { createRng } from './rng.js';
 import { createWorld, cloneWorld, updateWorld, stopWorld } from './world.js';
@@ -18,7 +27,7 @@ import {
   playerHitbox,
 } from './player.js';
 import { overlaps } from './collision.js';
-import { createScore, startCombo, addTrick, addPoints, bankCombo, loseCombo } from './score.js';
+import { createScore, cloneScore, startCombo, addTrick, addGrindTick, bankCombo, loseCombo } from './score.js';
 import { FLIP_FOR_ACTION } from './tricks.js';
 
 export function createRun(cfg, seed, opts = {}) {
@@ -27,8 +36,17 @@ export function createRun(cfg, seed, opts = {}) {
     ticks: 0,
     time: 0,
     score: 0,
-    over: false,
-    invincible: false,
+    tokenPoints: 0,
+    boards: cfg.lives.start,
+    nextExtra: cfg.lives.extraEvery, // score for the next extra board
+    down: false, // bailed, waiting to respawn
+    downTime: 0,
+    over: false, // no boards left
+    crashes: 0,
+    invincible: false, // debug toggle
+    invuln: 0, // s of invulnerability left after a respawn
+    freeze: 0, // s of freeze frame left
+    shake: 0, // s of screen shake left
     bailReason: null, // 'flip' | 'gap' | obstacle type
     bailSeg: null, // segment id of what caused the bail
     world: createWorld(cfg, createRng(seed), opts),
@@ -47,7 +65,7 @@ export function cloneRun(run, cfg) {
     ...run,
     world: cloneWorld(run.world),
     player: clonePlayer(run.player),
-    tricks: { ...run.tricks },
+    tricks: cloneScore(run.tricks),
     hitbox: { ...run.hitbox },
     events: [],
   };
@@ -67,10 +85,11 @@ function makeEnv(run, cfg) {
     floor() {
       const b = boardSpan(run, cfg);
       const groundY = cfg.world.groundY;
+      const safe = run.invincible || run.invuln > 0;
       for (const ob of run.world.obstacles) {
         if (ob.x > b.right) break;
         // Over a gap only when both wheels are over the hole.
-        if (ob.type === 'gap' && !run.invincible && ob.x <= b.left && b.right <= ob.x + ob.w) return null;
+        if (ob.type === 'gap' && !safe && ob.x <= b.left && b.right <= ob.x + ob.w) return null;
         if (ob.type === 'kicker' && b.centre >= ob.x && b.centre <= ob.x + ob.w) {
           return groundY - (ob.h * (b.centre - ob.x)) / ob.w;
         }
@@ -104,13 +123,39 @@ function makeEnv(run, cfg) {
 }
 
 function bail(run, reason, seg, cfg) {
-  if (run.invincible) return;
-  run.over = true;
+  if (run.invincible || run.invuln > 0 || run.down) return;
+  run.down = true;
+  run.downTime = 0;
+  run.crashes++;
+  run.boards--;
+  if (run.boards <= 0) {
+    run.boards = 0;
+    run.over = true;
+  }
   run.bailReason = reason;
   run.bailSeg = seg;
+  run.freeze = cfg.bail.freeze;
+  run.shake = cfg.bail.shakeTime;
   bailPlayer(run.player);
   stopWorld(run.world, cfg);
   loseCombo(run.tricks);
+  run.events.push({ type: 'bail', reason });
+}
+
+// Back on the board: the next clearAhead px of world cleared, speed down by
+// speedLoss (recovering in world.js), a moment of invulnerability.
+function respawn(run, cfg) {
+  const w = run.world;
+  const limit = boardSpan(run, cfg).left + cfg.bail.clearAhead;
+  w.obstacles = w.obstacles.filter((ob) => ob.x >= limit);
+  if (w.nextSpawnX < limit) w.nextSpawnX = limit;
+  w.decel = 0;
+  w.speedScale = 1 - cfg.bail.speedLoss;
+  run.player = createPlayer(cfg);
+  run.down = false;
+  run.downTime = 0;
+  run.invuln = cfg.bail.invulnerable;
+  run.events.push({ type: 'respawn' });
 }
 
 function gapUnder(run, cfg) {
@@ -122,7 +167,7 @@ function gapUnder(run, cfg) {
 function handlePlayerEvents(run, cfg) {
   const evs = run.player.events;
   const s = run.tricks;
-  for (let i = 0; i < evs.length && !run.over; i++) {
+  for (let i = 0; i < evs.length && !run.down; i++) {
     const e = evs[i];
     switch (e.type) {
       case 'launch':
@@ -137,8 +182,11 @@ function handlePlayerEvents(run, cfg) {
         addTrick(s, 'grind', cfg);
         run.events.push({ type: 'grind' });
         break;
+      case 'grindEnd':
+        run.events.push({ type: 'grindEnd' });
+        break;
       case 'grindTick':
-        addPoints(s, cfg.tricks.grind.points);
+        addGrindTick(s, cfg);
         break;
       case 'land':
         if (e.result === 'bail') {
@@ -162,43 +210,78 @@ function handlePlayerEvents(run, cfg) {
 }
 
 export function runPress(run, cfg) {
-  if (run.over) return;
+  if (run.down) return;
   pressOllie(run.player, cfg);
   handlePlayerEvents(run, cfg);
 }
 
 // action: 'flipL' | 'flipR' | 'flipU' | 'flipD'
 export function runFlip(run, action, cfg) {
-  if (run.over) return;
+  if (run.down) return;
   pressFlip(run.player, FLIP_FOR_ACTION[action], cfg);
   handlePlayerEvents(run, cfg);
+}
+
+function collectTokens(run, hb, cfg) {
+  const list = run.world.tokens;
+  const half = cfg.tokens.size / 2;
+  for (let i = 0; i < list.length; i++) {
+    const t = list[i];
+    if (t.x - half > hb.x + hb.w) break;
+    if (t.x + half > hb.x && t.y + half > hb.y && t.y - half < hb.y + hb.h) {
+      list.splice(i--, 1);
+      run.tokenPoints += cfg.tokens.points;
+      run.events.push({ type: 'token' });
+    }
+  }
 }
 
 export function stepRun(run, dt, cfg) {
   run.ticks++;
   run.time += dt;
+  if (run.shake > 0) run.shake = Math.max(0, run.shake - dt);
+  if (run.freeze > 0) {
+    run.freeze -= dt; // freeze frame: nothing moves
+    if (run.down) run.downTime += dt;
+    return;
+  }
+  if (run.invuln > 0) run.invuln = Math.max(0, run.invuln - dt);
   updateWorld(run.world, dt, cfg);
   updatePlayer(run.player, dt, cfg, run.env);
-  if (run.over) {
+
+  if (run.down) {
     run.player.events.length = 0;
+    run.downTime += dt;
+    if (!run.over && run.downTime >= cfg.bail.respawnDelay) respawn(run, cfg);
     return;
   }
   handlePlayerEvents(run, cfg);
-  if (run.over) return;
+  if (run.down) return;
 
   // Side hits: anything solid the skater overlaps, except the rail being ground
   // (or just dropped off).
   const p = run.player;
   const hb = playerHitbox(p, run.world.distance, cfg, run.hitbox);
-  const list = run.world.obstacles;
-  for (let i = 0; i < list.length; i++) {
-    const ob = list[i];
-    if (ob.x > hb.x + hb.w) break; // sorted by x: nothing further can touch
-    if (!ob.solid || ob === p.grinding || ob === p.lastGrind) continue;
-    if (overlaps(hb, ob.hit)) {
-      bail(run, ob.type, ob.seg, cfg);
-      if (run.over) return;
+  if (!run.invuln && !run.invincible) {
+    const list = run.world.obstacles;
+    for (let i = 0; i < list.length; i++) {
+      const ob = list[i];
+      if (ob.x > hb.x + hb.w) break; // sorted by x: nothing further can touch
+      if (!ob.solid || ob === p.grinding || ob === p.lastGrind) continue;
+      if (overlaps(hb, ob.hit)) {
+        bail(run, ob.type, ob.seg, cfg);
+        return;
+      }
     }
   }
-  run.score = Math.floor(run.world.distance / cfg.score.pxPerPoint) + run.tricks.banked;
+  collectTokens(run, hb, cfg);
+
+  run.score = Math.floor(run.world.distance / cfg.score.pxPerPoint) + run.tricks.banked + run.tokenPoints;
+  while (run.score >= run.nextExtra) {
+    run.nextExtra += cfg.lives.extraEvery;
+    if (run.boards < cfg.lives.max) {
+      run.boards++;
+      run.events.push({ type: 'extraBoard' });
+    }
+  }
 }

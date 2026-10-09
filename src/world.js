@@ -5,6 +5,7 @@
 import { makeObstacle } from './collision.js';
 import { SEGMENT_BY_ID, pickSegment } from './segments.js';
 import { cloneRng } from './rng.js';
+import { gravity, launchSpeed } from './player.js';
 
 // Eased (smoothstep) from start to max speed over speedRampTime of run time.
 export function speedAt(clock, cfg) {
@@ -33,6 +34,8 @@ export function createWorld(cfg, rng, { spawn = true, script = null } = {}) {
     tier: 1,
     decel: 0,
     obstacles: [], // sorted by x
+    tokens: [], // { x, y } centres, sorted by x; collected ones are removed
+    speedScale: 1, // dips after a bail, recovers over time
     nextSpawnX: script ? script.length : cfg.world.startSpeed * cfg.spawn.openingClear + cfg.view.maxWidth,
     lastSeg: null,
     // Debug / soak overrides
@@ -43,7 +46,7 @@ export function createWorld(cfg, rng, { spawn = true, script = null } = {}) {
 }
 
 export function cloneWorld(w) {
-  return { ...w, rng: cloneRng(w.rng), obstacles: w.obstacles.slice() };
+  return { ...w, rng: cloneRng(w.rng), obstacles: w.obstacles.slice(), tokens: w.tokens.slice() };
 }
 
 export function inScript(w) {
@@ -57,8 +60,9 @@ export function stopWorld(w, cfg) {
 export function updateWorld(w, dt, cfg) {
   if (!inScript(w)) w.clock += dt;
   w.tier = w.tierOverride || tierAt(w.clock, cfg);
+  if (w.speedScale < 1) w.speedScale = Math.min(1, w.speedScale + (cfg.bail.speedLoss / cfg.bail.speedRecover) * dt);
   if (w.decel > 0) w.speed = Math.max(0, w.speed - w.decel * dt);
-  else w.speed = w.speedOverride || speedAt(w.clock, cfg);
+  else w.speed = (w.speedOverride || speedAt(w.clock, cfg)) * w.speedScale;
   w.distance += w.speed * dt;
   if (w.spawn) spawnAhead(w, cfg);
   cull(w, cfg);
@@ -76,7 +80,9 @@ function spawnAhead(w, cfg) {
     const items = w.script.items;
     while (w.scriptIndex < items.length && items[w.scriptIndex].x < horizon) {
       const it = items[w.scriptIndex++];
-      insert(w.obstacles, makeObstacle(it.type, it.x, cfg, it.w, 'tutorial'));
+      const ob = makeObstacle(it.type, it.x, cfg, it.w, 'tutorial');
+      insert(w.obstacles, ob);
+      addTokens(w, ob, cfg.world.startSpeed, cfg);
     }
   }
   while (w.nextSpawnX < horizon) spawnSegment(w, cfg);
@@ -98,6 +104,7 @@ function spawnSegment(w, cfg) {
     const width = it.type === 'gap' ? Math.round(it.w * stretch) : it.w;
     const ob = makeObstacle(it.type, x, cfg, width, seg.id);
     insert(w.obstacles, ob);
+    addTokens(w, ob, speed, cfg);
     const tail = (cfg.spawn.tail[it.type] || 0) * speed;
     end = Math.max(end, x + ob.w + tail);
   }
@@ -105,10 +112,52 @@ function spawnSegment(w, cfg) {
   w.nextSpawnX = end + space * speed;
 }
 
+// Tokens on the ideal line, so they quietly teach the route: along rails and
+// ledges at grind height, along a centred ollie arc over everything else you
+// jump, and around the kicker apex. Positions are where the skater's hitbox
+// centre passes (10 px above the feet).
+function addToken(w, x, y) {
+  const list = w.tokens;
+  for (let i = list.length - 1; i >= 0 && list[i].x > x - 12; i--) {
+    if (Math.abs(list[i].x - x) < 10 && Math.abs(list[i].y - y) < 10) return; // overlapping arcs
+  }
+  let i = list.length;
+  while (i > 0 && list[i - 1].x > x) i--;
+  list.splice(i, 0, { x: Math.round(x), y: Math.round(y) });
+}
+
+function addTokens(w, ob, speed, cfg) {
+  const t = cfg.tokens;
+  const groundY = cfg.world.groundY;
+  const g = gravity(cfg);
+  if (ob.grind) {
+    for (let x = ob.x + 12; x < ob.x + ob.w - 6; x += t.spacing) addToken(w, x, ob.y - 10);
+  } else if (ob.type === 'kicker') {
+    const T = cfg.physics.kickerAirtime;
+    const v = launchSpeed(cfg, T);
+    for (const f of t.kickerArc) {
+      const s = f * T;
+      addToken(w, ob.x + ob.w + speed * s, groundY - ob.h - (v * s - 0.5 * g * s * s) - 10);
+    }
+  } else {
+    const T = cfg.physics.ollieAirtime;
+    const v = launchSpeed(cfg, T);
+    const takeoff = ob.x + ob.w / 2 - (speed * T) / 2;
+    for (const f of t.arc) {
+      const s = f * T;
+      addToken(w, takeoff + speed * s, groundY - (v * s - 0.5 * g * s * s) - 10);
+    }
+  }
+}
+
 function cull(w, cfg) {
-  const list = w.obstacles;
   const limit = w.distance - cfg.world.cullMargin;
+  const list = w.obstacles;
   let n = 0;
   while (n < list.length && list[n].x + list[n].w < limit) n++;
   if (n > 0) list.splice(0, n);
+  const tokens = w.tokens;
+  n = 0;
+  while (n < tokens.length && tokens[n].x < limit) n++;
+  if (n > 0) tokens.splice(0, n);
 }
