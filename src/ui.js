@@ -253,10 +253,18 @@ export function drawBootScreen(g, W, H, t, cfg) {
 export const TITLE_PANELS = 4;
 
 // data.challenge: { beat, by } in challenge mode (two lines under the logo,
-// the panel box a little shorter), else null.
+// the panel box a little shorter), else null. data.streak: days in a row.
 export function drawTitleScreen(g, W, H, t, panel, data, pressed, cfg) {
   const cx = W >> 1;
   drawText(g, '¤' + data.wallet, W - 4, 2, COL.gold, { align: 'right', shadow: COL.ink });
+  if (data.streak > 0) {
+    // Under the wallet when it clears the logo; on narrow screens it would
+    // hit the logo, so it goes in the top-left corner instead.
+    const text = 'DAY ' + data.streak + ' STREAK';
+    const logoRight = cx + (textWidth('PIXEL GRIND', 2) >> 1);
+    if (W - 4 - textWidth(text) > logoRight + 8) drawText(g, text, W - 4, 11, COL.orange, { align: 'right', shadow: COL.ink });
+    else drawText(g, text, 4, 2, COL.orange, { shadow: COL.ink });
+  }
   drawText(g, 'PIXEL GRIND', cx, 11, COL.gold, { align: 'center', scale: 2, shadow: COL.ink });
   const start = data.touch ? 'TAP TO START' : 'SPACE OR CLICK TO START';
   let boxY = 46;
@@ -409,7 +417,8 @@ export function gameOverButtonAt(x, y, W) {
 // Under the score, in this order; lines that don't apply are left out (up to
 // 7 fit). result: { score, bestCombo, distance (px), coins, wallet, best (the
 // #1 score before this run), challenge ({ beat, by } or null), dailyBest (a
-// daily run that beat today's best), reason, rank (-1 = not in top 10), msg }
+// daily run that beat today's best), streakBonus (coins, 0 if none), reason,
+// rank (-1 = not in top 10), msg }
 function gameOverLines(r) {
   const lines = [];
   const c = r.challenge;
@@ -424,6 +433,7 @@ function gameOverLines(r) {
   else lines.push([fmt(r.best - r.score) + ' SHORT OF YOUR BEST', COL.steel]);
   lines.push([`BEST COMBO ${r.bestCombo}   DISTANCE ${Math.floor(r.distance / 10)}M`, COL.cream]);
   lines.push([`COINS +${r.coins}   WALLET ¤${r.wallet}`, COL.gold]);
+  if (r.streakBonus > 0) lines.push([`STREAK BONUS +¤${r.streakBonus}`, COL.orange]);
   // Rank 1 is already announced by NEW BEST.
   if (r.rank > 0) lines.push(['RANK ' + (r.rank + 1) + ' OF 10', COL.gold]);
   return lines;

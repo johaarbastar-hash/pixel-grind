@@ -1,5 +1,5 @@
-// Challenge links and the daily run. No DOM access: the caller passes the
-// URL's search params. Dates are local calendar days as 'YYYYMMDD'.
+// Challenge links, the daily run and the streak. No DOM access: the caller
+// passes the URL's search params. Dates are local calendar days as 'YYYYMMDD'.
 //
 // A challenge link is ?seed=S&beat=N&by=XYZ: play the course from seed S
 // (no tutorial, so it's the same course the sender rode) and beat N, set by
@@ -103,4 +103,28 @@ export function recordDailyScore(day, score) {
   d.best = score;
   setSetting('daily', d);
   return true;
+}
+
+// --- Streak: consecutive days with a finished run ----------------------------------
+
+export function prevDay(key) {
+  const d = new Date(Number(key.slice(0, 4)), Number(key.slice(4, 6)) - 1, Number(key.slice(6, 8)) - 1);
+  return dateKey(d);
+}
+
+// The streak as of today: 0 once a calendar day has been skipped (no grace).
+export function getStreak(today) {
+  const s = getSetting('streak', null);
+  if (!s || !isDateKey(s.last)) return 0;
+  return s.last === today || s.last === prevDay(today) ? Math.max(0, s.count | 0) : 0;
+}
+
+// Call when a run is finished (game over). The first one of the day extends
+// the streak (or starts a new one) and pays the bonus: { streak, bonus }.
+export function finishRunForStreak(today, cfg) {
+  const s = getSetting('streak', null);
+  if (s && s.last === today) return { streak: Math.max(1, s.count | 0), bonus: 0 };
+  const count = getStreak(today) + 1;
+  setSetting('streak', { last: today, count });
+  return { streak: count, bonus: Math.min(count, cfg.streak.maxDays) * cfg.streak.bonusPerDay };
 }

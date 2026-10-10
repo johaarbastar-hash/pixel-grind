@@ -208,6 +208,14 @@ export const CONFIG = {
     maxBeat: 99999999, // larger beat= values in a link are ignored
   },
 
+  // Daily streak: consecutive calendar days with a finished run. The first
+  // finished run of a day pays min(streak, maxDays) x bonusPerDay coins.
+  streak: {
+    bonusPerDay: 10, // coins
+    maxDays: 7, // the bonus stops growing here
+    jingleDelay: 0.8, // s into the game-over screen before the bonus jingle
+  },
+
   ui: {
     blinkPeriod: 0.5, // s per on/off phase of blinking prompts
     rollFrameTime: 0.12, // s per rolling animation frame

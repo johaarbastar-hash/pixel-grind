@@ -74,6 +74,8 @@ import {
   getDaily,
   recordDailyAttempt,
   recordDailyScore,
+  getStreak,
+  finishRunForStreak,
 } from './modes.js';
 
 /* global __BUILD_ID__ */
@@ -173,6 +175,7 @@ function refreshScores() {
     wallet: shop.wallet,
     challenge: game.challenge,
     daily: getDaily(dateKey()),
+    streak: getStreak(dateKey()),
     installable: !!game.installPrompt,
   };
 }
@@ -277,6 +280,9 @@ function gameOver() {
   stopMusic();
   grindLoop(false);
   const run = game.run;
+  // The first finished run of the day extends the streak and pays a bonus.
+  const streak = finishRunForStreak(dateKey(), CONFIG);
+  shop.addCoins(streak.bonus);
   shop.save();
   recordRun({ distance: run.world.distance, bestCombo: run.tricks.best, tricks: run.tricks.landed, coins: run.coins });
   const rank = scoreRank(run.score);
@@ -286,6 +292,8 @@ function gameOver() {
     distance: run.world.distance,
     coins: run.coins,
     wallet: shop.wallet,
+    streakBonus: streak.bonus,
+    bonusPlayed: false, // the bonus jingle, once the game-over screen is up
     best: game.best,
     challenge: game.challenge,
     dailyBest: game.runCountsToday && recordDailyScore(game.runDaily, run.score),
@@ -996,6 +1004,13 @@ function tick(dt) {
       updatePopups(dt, CONFIG);
       updateCombo(dt, CONFIG, game.run.tricks);
       parts.update(dt);
+      if (game.state === 'gameover') {
+        const r = game.result;
+        if (r.streakBonus > 0 && !r.bonusPlayed && game.stateTime >= CONFIG.streak.jingleDelay) {
+          r.bonusPlayed = true;
+          playSfx('buy');
+        }
+      }
       break;
     case 'play': {
       if (game.zoomTime > 0) game.zoomTime = Math.max(0, game.zoomTime - dt);

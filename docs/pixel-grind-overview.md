@@ -161,7 +161,7 @@ Board colours are the underside of the deck plus the wheels. You mostly see them
 
 ---
 
-## 7. Playing against friends
+## 7. Challenges, daily run and streak
 
 ### Challenge links
 - SHARE on the game-over screen sends a challenge link: "I scored 4,120 in PIXEL GRIND. Beat me:" plus a link that carries the course (the run's seed), the score and your initials (or "YOU" if you've never entered any).
@@ -177,6 +177,11 @@ Board colours are the underside of the deck plus the wheels. You mostly see them
 - The HUD says "DAILY RUN" under the high score.
 - Your best score and number of attempts for today are saved. A title panel shows "TODAY'S RUN / BEST 3,420 / 3 ATTEMPTS". Game over says "DAILY BEST" when you improve it.
 - SHARE from a daily run sends a daily challenge link (?daily=YYYYMMDD with your score and initials). A friend who opens it plays that day's course, with the same challenge screens as above. If it's still the same day for them, the run counts toward their own daily record too.
+
+### Streak
+- Finishing at least one run (reaching game over) on consecutive calendar days builds a streak. Skip a day and it starts again from day 1; there's no grace day.
+- The title shows "DAY 6 STREAK" under the wallet (in the top-left corner on narrow screens, where it would hit the logo).
+- The first finished run of each day pays a streak bonus of 10 coins per streak day, up to 70 at 7 days. Game over shows "STREAK BONUS +¤60" in orange with the shop's purchase jingle.
 
 ---
 
@@ -200,7 +205,7 @@ A crash during the tutorial rewinds you to the last checkpoint instead of costin
   - Logo and a flashing "TAP TO START" (in challenge mode, "CHALLENGE FROM XYZ" and "BEAT 4,120" as well).
   - A computer player skates a demo run in the background.
   - A panel cycles every 5 s: how to play, the high-score table, your stats (runs, total distance, best combo, tricks landed, coins collected), and today's daily run.
-  - Your wallet sits in the corner. SHOP and DAILY buttons sit under the panel. On Android there's also an INSTALL button.
+  - Your wallet sits in the corner, with your day streak. SHOP and DAILY buttons sit under the panel. On Android there's also an INSTALL button.
 - **During a run (HUD):**
   - Top-left: score, with this run's coins under it.
   - Top-centre: the high score (gold once you've passed it this run), and in a challenge run the score to beat under it ("DAILY RUN" in a daily run).
@@ -209,7 +214,7 @@ A crash during the tutorial rewinds you to the last checkpoint instead of costin
   - The game pauses itself if you switch apps or turn the phone upright.
   - Resuming counts down 3-2-1.
 - **New high score:** pick 3 initials (swipe up/down to change a letter, tap to confirm).
-- **Game over:** the cause, score, the challenge result in a challenge run, "DAILY BEST" if you improved today's daily score, how it compares with your best ("NEW BEST BY 320" or "147 SHORT OF YOUR BEST"), best combo, distance, coins, and your rank if you made the top 10. Buttons: SHARE (sends a challenge link, see section 7), SHOP, TITLE. Tap anywhere else to retry.
+- **Game over:** the cause, score, the challenge result in a challenge run, "DAILY BEST" if you improved today's daily score, how it compares with your best ("NEW BEST BY 320" or "147 SHORT OF YOUR BEST"), best combo, distance, coins, any streak bonus, and your rank if you made the top 10. Buttons: SHARE (sends a challenge link, see section 7), SHOP, TITLE. Tap anywhere else to retry.
 - **Rotate screen:** held upright, the phone shows an animated "ROTATE YOUR PHONE".
 
 ---
@@ -242,7 +247,7 @@ A crash during the tutorial rewinds you to the last checkpoint instead of costin
   - ollie pop, kicker launch, landing thud, wobbly sketchy landing, flip whoosh
   - grind clank and a looping grind scrape
   - coin bling, a combo arpeggio that rises with bigger combos (and a longer, higher one for each hype tier), crash
-  - shop purchase jingle, menu blips, countdown beeps
+  - shop purchase jingle (also for the daily streak bonus), menu blips, countdown beeps
   - a short sting when you pass your best, game-over jingle, high-score fanfare
 - **Music:** a looping chiptune (bass, lead, drums) that speeds up with each difficulty tier. It stops on pause and crash.
 - **Vibration (Android):** a short buzz on a crash, a double pulse on combos over 1,000, and a longer pattern for GNARLY and LEGENDARY.
@@ -251,7 +256,7 @@ A crash during the tutorial rewinds you to the last checkpoint instead of costin
 
 ## 12. What's saved on the phone
 
-The high-score table, stats, settings (sound, CRT, tutorial done, last initials), coin wallet, owned gear, worn gear, and today's daily best and attempts are all saved in the browser on that phone. **There are no accounts and no online features.** Scores and coins don't move between phones. The only way scores travel between players is a challenge link (section 7).
+The high-score table, stats, settings (sound, CRT, tutorial done, last initials), coin wallet, owned gear, worn gear, today's daily best and attempts, and your streak (last day played and day count) are all saved in the browser on that phone. **There are no accounts and no online features.** Scores and coins don't move between phones. The only way scores travel between players is a challenge link (section 7).
 
 ---
 
