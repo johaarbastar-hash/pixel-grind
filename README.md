@@ -21,9 +21,12 @@ Touching the screen pops; the direction you swipe picks the flip.
 - Land with the flip finished: clean. With 60 ms or less of spin left: SKETCHY, half points. More: bail.
 - Kickers launch you high enough for two flips. Land on a rail or ledge and you grind automatically.
 - A combo lasts from leaving the ground to landing; grinds keep it alive. Score = trick points x the number of different tricks. Repeats in one combo score 50%, then 25%.
-- 3 boards per run, and no extra boards. Coins on the ideal line are worth 50 points each and go in your wallet.
-- Spend coins in the SHOP (on the title or game-over screen) on hats, shirts, trousers and boards. Tap an item to try it on, then BUY.
-- Keyboard: Space = ollie, arrows = flips, P / Esc = pause, M = mute.
+- Combos of 300 / 600 / 1,000 / 2,500 / 5,000 are NICE / RAD / SICK / GNARLY / LEGENDARY, each with its own word, sound and hit-stop.
+- 3 boards per run, and no extra boards. When the last one goes you can buy a continue with coins (200, then 400; at most 2 per run).
+- Coins on the ideal line are worth 50 points each and go in your wallet. Spend them in the SHOP (on the title or game-over screen) on hats, shirts, trousers and boards. Tap an item to try it on, then BUY.
+- SHARE sends a challenge link: your friend plays the same course with your score to beat.
+- DAILY plays today's course, the same for everyone. Finishing a run on consecutive days builds a streak that pays a coin bonus once a day.
+- Keyboard: Space = ollie, arrows = flips, P / Esc = pause, M = mute, S = shop, D = daily run, C = continue.
 
 ## Design decisions
 
@@ -109,6 +112,7 @@ src/segments.js   hand-authored obstacle patterns with tiers                (no 
 src/bot.js        autopilot that plans by simulation                        (no DOM)
 src/gear.js       shop catalogue: hats, shirts, trousers, boards            (no DOM)
 src/shop.js       wallet, owned and worn gear, saved in storage
+src/modes.js      challenge links, daily seed and record, streak
 src/render.js     scaling, parallax, particles, skater frames
 src/sprites.js    palette, sprites and background layers, all drawn in code
 src/font.js       8x8 bitmap font
@@ -117,4 +121,4 @@ src/ui.js         HUD, menus, title, game over, initials, shop
 scripts/soak.mjs  bot soak test
 ```
 
-The full design document is [skater-game-plan.md](skater-game-plan.md).
+The full design document is [skater-game-plan.md](skater-game-plan.md). Everything currently in the game is described in [docs/pixel-grind-overview.md](docs/pixel-grind-overview.md).
