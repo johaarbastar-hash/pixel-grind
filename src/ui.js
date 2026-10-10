@@ -250,7 +250,7 @@ export function drawBootScreen(g, W, H, t, cfg) {
 // high-score table and stats, over the bot's demo run. The wallet sits in the
 // top-right corner and the SHOP button under the panel.
 
-export const TITLE_PANELS = 3;
+export const TITLE_PANELS = 4;
 
 // data.challenge: { beat, by } in challenge mode (two lines under the logo,
 // the panel box a little shorter), else null.
@@ -298,7 +298,7 @@ export function drawTitleScreen(g, W, H, t, panel, data, pressed, cfg) {
       drawText(g, `${rank}. ${s.name}  ${String(s.score).padStart(6, '0')}`, cx, y, i === 0 ? COL.gold : COL.cream, center);
       y += 9;
     });
-  } else {
+  } else if (panel === 2) {
     const st = data.stats;
     line('STATS', COL.rose);
     y += 6;
@@ -307,20 +307,41 @@ export function drawTitleScreen(g, W, H, t, panel, data, pressed, cfg) {
     line('BEST COMBO ' + st.bestCombo);
     line('TRICKS LANDED ' + st.tricks);
     line('COINS COLLECTED ' + st.coins);
+  } else {
+    const d = data.daily;
+    line("TODAY'S RUN", COL.rose);
+    line('SAME COURSE FOR EVERYONE', COL.steel);
+    y += 8;
+    if (d.attempts > 0) {
+      line('BEST ' + fmt(d.best), COL.gold);
+      line(d.attempts + (d.attempts === 1 ? ' ATTEMPT' : ' ATTEMPTS'));
+    } else {
+      line('NOT PLAYED YET');
+    }
+    y += 8;
+    line(data.touch ? 'TAP DAILY TO PLAY' : 'PRESS D TO PLAY', COL.mint);
   }
 
-  drawButton(g, SHOP_BUTTON(W), 'SHOP', pressed === 'shop');
-  if (data.installable) drawButton(g, INSTALL_BUTTON(W), 'INSTALL', pressed === 'install');
-  drawText(g, 'BUILD ' + data.build, W - 4, H - 10, COL.steel, { align: 'right' });
+  const b = titleButtons(W);
+  drawButton(g, b.shop, 'SHOP', pressed === 'shop');
+  drawButton(g, b.daily, 'DAILY', pressed === 'daily');
+  if (data.installable) drawButton(g, b.install, 'INSTALL', pressed === 'install');
+  drawText(g, data.build, W - 4, H - 10, COL.steel, { align: 'right' });
 }
 
-const SHOP_BUTTON = (W) => ({ x: (W >> 1) - 36, y: 161, w: 72, h: 17 });
-// Shown on the title screen when the browser offers installing the app (M8).
-const INSTALL_BUTTON = (W) => ({ x: 4, y: 162, w: 64, h: 14 });
+// SHOP and DAILY side by side under the panel; INSTALL (when the browser
+// offers installing the app) in the bottom-left corner.
+const titleButtons = (W) => ({
+  shop: { x: (W >> 1) - 68, y: 161, w: 64, h: 17 },
+  daily: { x: (W >> 1) + 4, y: 161, w: 64, h: 17 },
+  install: { x: 4, y: 162, w: 64, h: 14 },
+});
 
 export function titleButtonAt(x, y, W, installable) {
-  if (inRect(SHOP_BUTTON(W), x, y)) return 'shop';
-  return installable && inRect(INSTALL_BUTTON(W), x, y) ? 'install' : null;
+  const b = titleButtons(W);
+  if (inRect(b.shop, x, y)) return 'shop';
+  if (inRect(b.daily, x, y)) return 'daily';
+  return installable && inRect(b.install, x, y) ? 'install' : null;
 }
 
 // --- Tutorial prompt -------------------------------------------------------------
@@ -387,8 +408,8 @@ export function gameOverButtonAt(x, y, W) {
 
 // Under the score, in this order; lines that don't apply are left out (up to
 // 7 fit). result: { score, bestCombo, distance (px), coins, wallet, best (the
-// #1 score before this run), challenge ({ beat, by } or null), reason, rank
-// (-1 = not in top 10), msg }
+// #1 score before this run), challenge ({ beat, by } or null), dailyBest (a
+// daily run that beat today's best), reason, rank (-1 = not in top 10), msg }
 function gameOverLines(r) {
   const lines = [];
   const c = r.challenge;
@@ -397,6 +418,7 @@ function gameOverLines(r) {
     else if (r.score === c.beat) lines.push([`TIED WITH ${c.by}`, COL.cream]);
     else lines.push([`${c.by} WINS BY ${fmt(c.beat - r.score)}`, COL.rose]);
   }
+  if (r.dailyBest) lines.push(['DAILY BEST', COL.gold]);
   if (r.score > r.best) lines.push(['NEW BEST BY ' + fmt(r.score - r.best), COL.gold]);
   else if (r.score === r.best) lines.push(['TIED YOUR BEST', COL.cream]);
   else lines.push([fmt(r.best - r.score) + ' SHORT OF YOUR BEST', COL.steel]);

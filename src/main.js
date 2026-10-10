@@ -65,7 +65,16 @@ import { createBot } from './bot.js';
 import { getSetting, setSetting, getScores, scoreRank, addScore, getStats, recordRun } from './storage.js';
 import { createShop } from './shop.js';
 import { SLOTS, SLOT_NAMES, itemsIn, lookFor } from './gear.js';
-import { parseChallenge, challengeQuery, CHALLENGE_PARAMS } from './modes.js';
+import {
+  parseChallenge,
+  challengeQuery,
+  CHALLENGE_PARAMS,
+  dateKey,
+  dailySeed,
+  getDaily,
+  recordDailyAttempt,
+  recordDailyScore,
+} from './modes.js';
 
 /* global __BUILD_ID__ */
 const BUILD = typeof __BUILD_ID__ !== 'undefined' ? __BUILD_ID__ : 'DEV';
@@ -140,6 +149,9 @@ const game = {
   challenge: challengeLink, // { seed, beat, by } while in challenge mode
   beaten: false, // this run has passed the challenge score
   beatenTime: 0, // s BEATEN! stays on the HUD
+  daily: null, // date key while playing daily runs from the DAILY button
+  runDaily: null, // date key of the current run's daily course, or null
+  runCountsToday: false, // the current run counts for today's daily record
   zoomTime: 0, // s of zoom punch left
   crt: null, // overlay currently shown
 };
@@ -160,6 +172,7 @@ function refreshScores() {
     stats: getStats(),
     wallet: shop.wallet,
     challenge: game.challenge,
+    daily: getDaily(dateKey()),
     installable: !!game.installPrompt,
   };
 }
@@ -194,7 +207,15 @@ function newDemoRun() {
   game.demoTime = 0;
 }
 
+// Today's course, same for everyone. Retries stay on it until TITLE.
+function startDaily() {
+  leaveChallenge();
+  game.daily = dateKey();
+  startRun();
+}
+
 function toTitle() {
+  game.daily = null;
   try {
     sessionStorage.setItem('pixel-grind.booted', '1');
   } catch {
@@ -222,12 +243,20 @@ function updateDemo(dt) {
 
 // --- Runs ------------------------------------------------------------------------
 
-// Challenge runs never have the tutorial: it would change the course.
+// Challenge and daily runs never have the tutorial: it would change the course.
 function startRun(forceTutorial = false) {
   const c = game.challenge;
+  game.runDaily = (c && c.daily) || game.daily;
+  game.runCountsToday = game.runDaily === dateKey();
+  if (game.runCountsToday) recordDailyAttempt(game.runDaily);
   const tutorial =
-    !c && (forceTutorial || params.get('tutorial') === '1' || (!replay && !getSetting('tutorialDone', false)));
-  const seed = c ? c.seed : (urlSeed ?? randomSeed());
+    !c &&
+    !game.runDaily &&
+    (forceTutorial || params.get('tutorial') === '1' || (!replay && !getSetting('tutorialDone', false)));
+  let seed;
+  if (c) seed = c.seed;
+  else if (game.runDaily) seed = dailySeed(game.runDaily);
+  else seed = urlSeed ?? randomSeed();
   const run = createRun(CONFIG, seed, { spawn: true, script: tutorial ? TUTORIAL : null });
   if (replay) run.world.nextSpawnX = CONFIG.view.maxWidth + 40; // straight to the action, like the soak test
   if (urlSpeed) run.world.speedOverride = urlSpeed;
@@ -259,6 +288,7 @@ function gameOver() {
     wallet: shop.wallet,
     best: game.best,
     challenge: game.challenge,
+    dailyBest: game.runCountsToday && recordDailyScore(game.runDaily, run.score),
     reason: run.bailReason,
     rank,
     msg: null,
@@ -319,10 +349,12 @@ function checkChallenge(dt) {
 }
 
 // HUD line under the hi-score: the score to beat, BEATEN!, then the margin.
+// A daily run with nothing to beat just says so.
+const DAILY_LINE = { text: 'DAILY RUN', color: COL.teal };
 let beatLine = { text: '', color: COL.cream, key: '' };
 function hudBeat() {
   const c = game.challenge;
-  if (!c) return null;
+  if (!c) return game.runDaily ? DAILY_LINE : null;
   let text;
   let color;
   if (!game.beaten) {
@@ -396,6 +428,7 @@ const MENU = [
     label: () => 'REPLAY TUTORIAL',
     run: () => {
       leaveChallenge();
+      game.daily = null;
       startRun(true);
     },
   },
@@ -470,7 +503,7 @@ function share() {
   const r = game.result;
   const text = `I scored ${fmt(r.score)} in PIXEL GRIND. Beat me:`;
   const by = getSetting('lastInitials', null) || 'YOU';
-  const url = location.origin + location.pathname + challengeQuery(game.run.seed, r.score, by);
+  const url = location.origin + location.pathname + challengeQuery(game.run.seed, game.runDaily, r.score, by);
   const fallback = () => {
     const copy =
       navigator.clipboard && navigator.clipboard.writeText
@@ -535,7 +568,8 @@ function handleTitle(a) {
     else if (pressed === 'shop') {
       playSfx('select');
       openShop();
-    } else startRun();
+    } else if (pressed === 'daily') startDaily();
+    else startRun();
   }
 }
 
@@ -880,6 +914,17 @@ function handleAction(a) {
   }
   if (a === 'mute') {
     toggleMute();
+    return;
+  }
+  // Keys for the SHOP and DAILY buttons.
+  if (a === 'shop' || a === 'daily') {
+    if (game.portrait) return;
+    if (a === 'daily' && game.state === 'start') startDaily();
+    const canShop = game.state === 'start' || (game.state === 'gameover' && game.stateTime >= CONFIG.bail.retryDelay);
+    if (a === 'shop' && canShop) {
+      playSfx('select');
+      openShop();
+    }
     return;
   }
   if (a === 'pause') {

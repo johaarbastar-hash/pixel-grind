@@ -31,7 +31,7 @@ One rule: **touching the screen jumps; the direction you swipe picks the flip.**
 - You can queue one more flip while one is spinning.
 - Grinding is automatic: land on top of a rail or ledge and you grind it.
 - After rolling off the end of a rail you still have 0.08 s to jump.
-- Keyboard (computer): Space = ollie, arrow keys = flips, P or Esc = pause, M = mute.
+- Keyboard (computer): Space = ollie, arrow keys = flips, P or Esc = pause, M = mute, S = shop, D = daily run.
 
 ---
 
@@ -172,6 +172,12 @@ Board colours are the underside of the deck plus the wheels. You mostly see them
 - Challenge runs still count for your local high-score table.
 - No server is involved: the link itself carries everything.
 
+### Daily run
+- The DAILY button on the title (or D on a keyboard) plays today's course. It's built from the date, so everyone gets the same course that day, and there's no tutorial. Attempts are unlimited, and retry stays on the daily course until you go back to the title.
+- The HUD says "DAILY RUN" under the high score.
+- Your best score and number of attempts for today are saved. A title panel shows "TODAY'S RUN / BEST 3,420 / 3 ATTEMPTS". Game over says "DAILY BEST" when you improve it.
+- SHARE from a daily run sends a daily challenge link (?daily=YYYYMMDD with your score and initials). A friend who opens it plays that day's course, with the same challenge screens as above. If it's still the same day for them, the run counts toward their own daily record too.
+
 ---
 
 ## 8. First-run tutorial
@@ -193,17 +199,17 @@ A crash during the tutorial rewinds you to the last checkpoint instead of costin
 - **Title:**
   - Logo and a flashing "TAP TO START" (in challenge mode, "CHALLENGE FROM XYZ" and "BEAT 4,120" as well).
   - A computer player skates a demo run in the background.
-  - A panel cycles every 5 s: how to play, the high-score table, and your stats (runs, total distance, best combo, tricks landed, coins collected).
-  - Your wallet sits in the corner, with a SHOP button underneath. On Android there's also an INSTALL button.
+  - A panel cycles every 5 s: how to play, the high-score table, your stats (runs, total distance, best combo, tricks landed, coins collected), and today's daily run.
+  - Your wallet sits in the corner. SHOP and DAILY buttons sit under the panel. On Android there's also an INSTALL button.
 - **During a run (HUD):**
   - Top-left: score, with this run's coins under it.
-  - Top-centre: the high score (gold once you've passed it this run), and in a challenge run the score to beat under it.
+  - Top-centre: the high score (gold once you've passed it this run), and in a challenge run the score to beat under it ("DAILY RUN" in a daily run).
   - Top-right: a pause button, with one board icon per board left beside it.
 - **Pause menu:** RESUME, SOUND on/off, CRT on/off, REPLAY TUTORIAL, QUIT.
   - The game pauses itself if you switch apps or turn the phone upright.
   - Resuming counts down 3-2-1.
 - **New high score:** pick 3 initials (swipe up/down to change a letter, tap to confirm).
-- **Game over:** the cause, score, the challenge result in a challenge run, how it compares with your best ("NEW BEST BY 320" or "147 SHORT OF YOUR BEST"), best combo, distance, coins, and your rank if you made the top 10. Buttons: SHARE (sends a challenge link, see section 7), SHOP, TITLE. Tap anywhere else to retry.
+- **Game over:** the cause, score, the challenge result in a challenge run, "DAILY BEST" if you improved today's daily score, how it compares with your best ("NEW BEST BY 320" or "147 SHORT OF YOUR BEST"), best combo, distance, coins, and your rank if you made the top 10. Buttons: SHARE (sends a challenge link, see section 7), SHOP, TITLE. Tap anywhere else to retry.
 - **Rotate screen:** held upright, the phone shows an animated "ROTATE YOUR PHONE".
 
 ---
@@ -245,7 +251,7 @@ A crash during the tutorial rewinds you to the last checkpoint instead of costin
 
 ## 12. What's saved on the phone
 
-The high-score table, stats, settings (sound, CRT, tutorial done, last initials), coin wallet, owned gear and worn gear are all saved in the browser on that phone. **There are no accounts and no online features.** Scores and coins don't move between phones. The only way scores travel between players is a challenge link (section 7).
+The high-score table, stats, settings (sound, CRT, tutorial done, last initials), coin wallet, owned gear, worn gear, and today's daily best and attempts are all saved in the browser on that phone. **There are no accounts and no online features.** Scores and coins don't move between phones. The only way scores travel between players is a challenge link (section 7).
 
 ---
 
@@ -274,7 +280,6 @@ The high-score table, stats, settings (sound, CRT, tutorial done, last initials)
 - **Grabs, wallrides, and a balance meter for grinds.**
 - **Stairs and drops:** more than one ground height.
 - **Missions:** 3 at a time, for example "land 2 kickflips in one run".
-- **Daily run:** the same course for everyone that day.
 - **HARDCORE mode:** one board only.
 - **Still to decide:** the final name, and the skater's default look.
 

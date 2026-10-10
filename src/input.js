@@ -8,6 +8,8 @@
 //   'debug'   backtick
 //   'tune'    T (tuning panel, debug mode only)
 //   'mute'    M
+//   'shop'    S (title, game over)
+//   'daily'   D (title)
 //
 // Swipes: touching the screen pops; the direction you swipe picks the flip.
 // A swipe counts the moment the finger has moved swipeDistance CSS px within
@@ -161,6 +163,15 @@ export function createInput(cfg) {
       case 'KeyM':
         if (!e.repeat) {
           push('mute');
+          gesture(e);
+        }
+        break;
+      // Keys for on-screen buttons.
+      case 'KeyS':
+      case 'KeyD':
+        if (!e.repeat) {
+          api.lastSource = 'key';
+          push(e.code === 'KeyS' ? 'shop' : 'daily');
           gesture(e);
         }
         break;
