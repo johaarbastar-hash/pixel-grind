@@ -5,7 +5,8 @@
 // Bails: the skater goes down (run.down), loses a board, and respawns after
 // CONFIG.bail.respawnDelay with the road ahead cleared and a moment of
 // invulnerability. With no boards left the run is over (run.over). There are
-// no extra boards: every run gets CONFIG.lives.start.
+// no extra boards: every run gets CONFIG.lives.start, and the only way back
+// is a continue bought with coins (reviveRun).
 //
 // UI-facing happenings are pushed to run.events (drained by main.js):
 //   { type: 'launch', kind }                   ollie / pop ('ollie') or kicker
@@ -157,6 +158,15 @@ function respawn(run, cfg) {
   run.downTime = 0;
   run.invuln = cfg.bail.invulnerable;
   run.events.push({ type: 'respawn' });
+}
+
+// Continue (bought with coins) after the last board is lost: 1 board back and
+// the normal respawn (road ahead cleared, invulnerable, speed dip).
+export function reviveRun(run, cfg) {
+  if (!run.over) return;
+  run.over = false;
+  run.boards = 1;
+  respawn(run, cfg);
 }
 
 function gapUnder(run, cfg) {

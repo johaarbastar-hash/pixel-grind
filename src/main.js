@@ -1,7 +1,8 @@
 // Fixed-timestep loop and the state machine.
 // States: boot -> start (title + demo run) -> play <-> paused -> countdown ->
-// play ... -> initials (top 10 only) -> gameover -> play / start. The shop
-// opens from the title or the game-over screen and goes back to it.
+// play ... -> [continue: buy a board back] -> initials (top 10 only) ->
+// gameover -> play / start. The shop opens from the title or the game-over
+// screen and goes back to it.
 // Portrait on a phone overrides everything with the rotate screen.
 
 import { CONFIG } from './config.js';
@@ -9,7 +10,7 @@ import { randomSeed } from './rng.js';
 import { createInput } from './input.js';
 import { createRenderer, drawWorld, createParticles } from './render.js';
 import { buildSprites, buildSkater, buildSkaterTile, COL } from './sprites.js';
-import { createRun, cloneRun, runPress, runFlip, stepRun } from './run.js';
+import { createRun, cloneRun, runPress, runFlip, stepRun, reviveRun } from './run.js';
 import {
   drawHud,
   drawBootScreen,
@@ -38,6 +39,8 @@ import {
   fmt,
   drawShopScreen,
   shopHitAt,
+  drawContinueScreen,
+  continueButtonAt,
 } from './ui.js';
 import { createDebug, drawHitboxes, reportError } from './debug.js';
 import { isPortrait, isTouchDevice, enterFullscreenLandscape } from './device.js';
@@ -154,6 +157,7 @@ const game = {
   daily: null, // date key while playing daily runs from the DAILY button
   runDaily: null, // date key of the current run's daily course, or null
   runCountsToday: false, // the current run counts for today's daily record
+  continues: 0, // continues bought this run
   zoomTime: 0, // s of zoom punch left
   crt: null, // overlay currently shown
 };
@@ -269,6 +273,7 @@ function startRun(forceTutorial = false) {
   game.bannerTime = 0;
   game.beaten = false;
   game.beatenTime = 0;
+  game.continues = 0;
   refreshScores();
   setState('play');
   playSfx('select');
@@ -377,6 +382,47 @@ function hudBeat() {
   }
   if (beatLine.key !== text) beatLine = { text, color, key: text };
   return beatLine;
+}
+
+// --- Continue for coins ---------------------------------------------------------------
+// After the last bail, a few seconds to buy 1 board back (CONFIG.continue).
+// Only the CONTINUE button (or C) does anything; otherwise the time runs out
+// into game over. Not in challenge or daily runs, so shared scores compare.
+
+const continuePrice = () => CONFIG.continue.price * CONFIG.continue.priceGrowth ** game.continues;
+
+function endOfRun() {
+  const offer = !game.challenge && !game.runDaily && !game.tutorial && game.continues < CONFIG.continue.max;
+  if (offer) setState('continue');
+  else gameOver();
+}
+
+function buyContinue() {
+  if (!shop.spend(continuePrice())) {
+    playSfx('blip');
+    return;
+  }
+  game.continues++;
+  playSfx('buy');
+  reviveRun(game.run, CONFIG);
+  setState('play'); // the respawn event restarts the music
+}
+
+function handleContinue(a) {
+  const onButton = () => {
+    const p = internal();
+    return continueButtonAt(p.x, p.y, renderer.width);
+  };
+  if (a === 'continue') {
+    buyContinue();
+  } else if (a === 'press' && input.lastSource === 'pointer') {
+    game.armed = onButton();
+    game.pressed = game.armed ? 'continue' : null;
+  } else if (a === 'release' && game.armed) {
+    game.armed = false;
+    game.pressed = null;
+    if (onButton() && !input.releaseWasSwipe) buyContinue();
+  }
 }
 
 // --- Pause, countdown ----------------------------------------------------------------
@@ -967,6 +1013,9 @@ function handleAction(a) {
     case 'shop':
       handleShop(a);
       break;
+    case 'continue':
+      handleContinue(a);
+      break;
     case 'boot':
       // Tap skips the boot text.
       if (a === 'press') game.armed = true;
@@ -997,6 +1046,13 @@ function tick(dt) {
       break;
     case 'countdown':
       updateCountdown();
+      break;
+    case 'continue':
+      stepRun(game.run, dt, CONFIG);
+      updatePopups(dt, CONFIG);
+      updateCombo(dt, CONFIG, game.run.tricks);
+      parts.update(dt);
+      if (game.stateTime >= CONFIG.continue.time) gameOver();
       break;
     case 'initials':
     case 'gameover':
@@ -1034,7 +1090,7 @@ function tick(dt) {
       checkNewBest(dt);
       checkChallenge(dt);
       if (game.tutorial) updateTutorial(dt);
-      else if (game.run.over && game.run.downTime >= CONFIG.bail.gameOverDelay) gameOver();
+      else if (game.run.over && game.run.downTime >= CONFIG.bail.gameOverDelay) endOfRun();
       break;
     }
     // 'paused': frozen
@@ -1084,6 +1140,11 @@ function render() {
         case 'countdown':
           drawCountdown(g, W, String(Math.max(1, game.countdown)));
           break;
+        case 'continue': {
+          const left = 1 - game.stateTime / CONFIG.continue.time;
+          drawContinueScreen(g, W, H, continuePrice(), shop.wallet, left, game.pressed === 'continue', game.touch, sprites);
+          break;
+        }
         case 'initials':
           drawInitialsScreen(g, W, H, game.stateTime, game.entry, game.touch, sprites);
           break;

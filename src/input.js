@@ -10,6 +10,7 @@
 //   'mute'    M
 //   'shop'    S (title, game over)
 //   'daily'   D (title)
+//   'continue' C (continue offer after the last bail)
 //
 // Swipes: touching the screen pops; the direction you swipe picks the flip.
 // A swipe counts the moment the finger has moved swipeDistance CSS px within
@@ -169,9 +170,10 @@ export function createInput(cfg) {
       // Keys for on-screen buttons.
       case 'KeyS':
       case 'KeyD':
+      case 'KeyC':
         if (!e.repeat) {
           api.lastSource = 'key';
-          push(e.code === 'KeyS' ? 'shop' : 'daily');
+          push(e.code === 'KeyS' ? 'shop' : e.code === 'KeyD' ? 'daily' : 'continue');
           gesture(e);
         }
         break;

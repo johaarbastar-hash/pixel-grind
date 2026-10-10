@@ -390,6 +390,37 @@ export function drawInitialsScreen(g, W, H, t, entry, touch, sprites) {
   drawText(g, touch ? 'SWIPE ↑↓ TO CHANGE   TAP: OK' : '↑↓ TO CHANGE   SPACE: OK', cx, 126, COL.steel, center);
 }
 
+// --- Continue offer ----------------------------------------------------------------
+// After the last bail: CONTINUE? with the price, a bar running down, and the
+// CONTINUE button (greyed out, with the wallet shown, if it's too dear).
+
+const CONTINUE_BUTTON = (W) => ({ x: (W >> 1) - 60, y: 100, w: 120, h: 20 });
+
+export function continueButtonAt(x, y, W) {
+  return inRect(CONTINUE_BUTTON(W), x, y);
+}
+
+// left: fraction of the time left (1 -> 0).
+export function drawContinueScreen(g, W, H, price, wallet, left, pressed, touch, sprites) {
+  const cx = W >> 1;
+  g.drawImage(sprites.checker, 0, 0);
+  drawText(g, 'CONTINUE?', cx, 34, COL.cream, { align: 'center', scale: 2, shadow: COL.ink });
+  const afford = wallet >= price;
+  drawText(g, '¤' + price, cx, 56, afford ? COL.gold : COL.steel, { align: 'center', scale: 2, shadow: COL.ink });
+  // Countdown bar.
+  const bw = 120;
+  const bx = cx - (bw >> 1);
+  g.fillStyle = COL.ink;
+  g.fillRect(bx - 1, 81, bw + 2, 8);
+  g.fillStyle = COL.steel;
+  g.fillRect(bx - 1, 81, bw + 2, 1);
+  g.fillRect(bx - 1, 88, bw + 2, 1);
+  g.fillStyle = left > 0.33 ? COL.gold : COL.rose;
+  g.fillRect(bx, 83, Math.round(bw * Math.max(0, Math.min(1, left))), 4);
+  drawButton(g, CONTINUE_BUTTON(W), touch ? 'CONTINUE' : 'C: CONTINUE', pressed, !afford);
+  if (!afford) drawText(g, 'WALLET ¤' + wallet, cx, 128, COL.rose, center);
+}
+
 // --- Game over -----------------------------------------------------------------
 
 // By bail reason: obstacle type (city skin names), 'gap' or 'flip'.

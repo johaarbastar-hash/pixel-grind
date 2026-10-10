@@ -115,7 +115,16 @@ export const CONFIG = {
   },
 
   lives: {
-    start: 3, // boards per run; there are no extra boards
+    start: 3, // boards per run; no extra boards, except by buying a continue
+  },
+
+  // Continue for coins: on the last bail, a few seconds to buy 1 board back.
+  // Not offered in challenge or daily runs (shared scores stay comparable).
+  continue: {
+    price: 200, // coins for the first continue in a run...
+    priceGrowth: 2, // ...times this for each one after
+    max: 2, // per run
+    time: 3, // s to decide before it's game over
   },
 
   // Gear prices in coins, by item tier (items are listed in gear.js). A run

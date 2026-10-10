@@ -31,6 +31,13 @@ export function createShop(cfg) {
     addCoins(n) {
       shop.wallet += n;
     },
+    // Pays n coins (and saves) if the wallet has them; returns false if not.
+    spend(n) {
+      if (shop.wallet < n) return false;
+      shop.wallet -= n;
+      shop.save();
+      return true;
+    },
     save() {
       setSetting('coins', shop.wallet);
     },

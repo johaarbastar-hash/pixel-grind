@@ -8,7 +8,7 @@
 
 ## 1. The game in short
 
-PIXEL GRIND is an endless side-scrolling skateboarding game for phone browsers, styled like an 80s/90s arcade machine. The skater rolls right on their own. You tap to jump (ollie) and swipe to do flip tricks. You jump over cones, trash cans and holes, and land on rails and ledges to grind them. Chaining tricks before you touch the ground builds a combo. The game gets faster and harder the longer you survive. You have 3 boards (lives) per run. Coins on the road go into a wallet you spend in a shop on gear for your skater.
+PIXEL GRIND is an endless side-scrolling skateboarding game for phone browsers, styled like an 80s/90s arcade machine. The skater rolls right on their own. You tap to jump (ollie) and swipe to do flip tricks. You jump over cones, trash cans and holes, and land on rails and ledges to grind them. Chaining tricks before you touch the ground builds a combo. The game gets faster and harder the longer you survive. You have 3 boards (lives) per run, and can buy a board back with coins when the last one goes. Coins on the road go into a wallet you spend in a shop on gear for your skater.
 
 A run usually lasts one to a few minutes. Everything is designed for one thumb.
 
@@ -31,7 +31,7 @@ One rule: **touching the screen jumps; the direction you swipe picks the flip.**
 - You can queue one more flip while one is spinning.
 - Grinding is automatic: land on top of a rail or ledge and you grind it.
 - After rolling off the end of a rail you still have 0.08 s to jump.
-- Keyboard (computer): Space = ollie, arrow keys = flips, P or Esc = pause, M = mute, S = shop, D = daily run.
+- Keyboard (computer): Space = ollie, arrow keys = flips, P or Esc = pause, M = mute, S = shop, D = daily run, C = continue.
 
 ---
 
@@ -122,13 +122,19 @@ A combo that banks at or above a tier gets that tier's word drawn big above the 
 
 ## 5. Boards (lives) and bails
 
-- **3 boards per run.** There are no extra boards; you can't win more.
+- **3 boards per run.** There are no extra boards; you can't win more. The one exception is buying a continue (below).
 - **When you bail:**
   - The screen freezes for a moment and shakes, and the skater tumbles while their board skids away.
   - You lose one board and the combo you were building.
   - After 1.5 s the skater gets back up. The road just ahead is cleared and you're invulnerable (blinking) for 1 s.
   - Your speed drops 15%, then recovers over 5 s.
-- When the last board is gone, it's game over.
+- **Continue for coins:** when the last board goes, a "CONTINUE? ¤200" panel appears with a 3-second countdown bar and a CONTINUE button (C on a keyboard).
+  - Continuing costs 200 coins and gives back 1 board, with the normal recovery: road ahead cleared, 1 s invulnerable, speed dip.
+  - The price doubles for the second continue (400), and there are at most 2 per run.
+  - If you can't afford it, the button is greyed out and your wallet is shown.
+  - Tapping anywhere else does nothing; when the bar runs out, it's game over.
+  - Not offered in challenge or daily runs, so shared scores stay comparable.
+- When the last board is gone (and you don't continue), it's game over.
 - The game-over screen says what got you: "HIT A CONE", "HIT A TRASH CAN", "HIT A LEDGE", "HIT A RAIL", "FELL IN A HOLE" or "LANDED MID-FLIP".
 
 ---
@@ -213,6 +219,7 @@ A crash during the tutorial rewinds you to the last checkpoint instead of costin
 - **Pause menu:** RESUME, SOUND on/off, CRT on/off, REPLAY TUTORIAL, QUIT.
   - The game pauses itself if you switch apps or turn the phone upright.
   - Resuming counts down 3-2-1.
+- **Continue offer:** after the last bail, "CONTINUE?" with the price, a countdown bar and a CONTINUE button (see section 5).
 - **New high score:** pick 3 initials (swipe up/down to change a letter, tap to confirm).
 - **Game over:** the cause, score, the challenge result in a challenge run, "DAILY BEST" if you improved today's daily score, how it compares with your best ("NEW BEST BY 320" or "147 SHORT OF YOUR BEST"), best combo, distance, coins, any streak bonus, and your rank if you made the top 10. Buttons: SHARE (sends a challenge link, see section 7), SHOP, TITLE. Tap anywhere else to retry.
 - **Rotate screen:** held upright, the phone shows an animated "ROTATE YOUR PHONE".
@@ -256,7 +263,7 @@ A crash during the tutorial rewinds you to the last checkpoint instead of costin
 
 ## 12. What's saved on the phone
 
-The high-score table, stats, settings (sound, CRT, tutorial done, last initials), coin wallet, owned gear, worn gear, today's daily best and attempts, and your streak (last day played and day count) are all saved in the browser on that phone. **There are no accounts and no online features.** Scores and coins don't move between phones. The only way scores travel between players is a challenge link (section 7).
+The high-score table, stats, settings (sound, CRT, tutorial done, last initials), coin wallet (spent in the shop and on continues), owned gear, worn gear, today's daily best and attempts, and your streak (last day played and day count) are all saved in the browser on that phone. **There are no accounts and no online features.** Scores and coins don't move between phones. The only way scores travel between players is a challenge link (section 7).
 
 ---
 
