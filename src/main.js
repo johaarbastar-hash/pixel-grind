@@ -34,6 +34,7 @@ import {
   updatePopups,
   drawPopups,
   drawBanner,
+  hypeTier,
   drawShopScreen,
   shopHitAt,
 } from './ui.js';
@@ -131,6 +132,8 @@ const game = {
   flash: 0, // frames of white flash left (big combos)
   newBest: false, // this run has passed the #1 score (game.best)
   bannerTime: 0, // s the NEW BEST! banner has left
+  hitStop: 0, // ticks the world stays frozen after a hype-tier combo
+  zoomTime: 0, // s of zoom punch left
   crt: null, // overlay currently shown
 };
 
@@ -161,6 +164,8 @@ function applyDebug(run) {
 
 function setRun(run) {
   game.run = run;
+  game.hitStop = 0;
+  game.zoomTime = 0;
   applyDebug(run);
   bot.reset();
   clearPopups();
@@ -747,10 +752,13 @@ function handleRunEvents(run) {
         playSfx(e.result === 'sketchy' ? 'sketchy' : 'land');
         dust(run);
         if (e.tricks > 0) {
-          playSfx('combo', { points: e.points });
-          if (e.result === 'sketchy') holdCombo(e.chain, 'SKETCHY! +' + e.points, COL.orange, renderer.width);
-          else holdCombo(e.chain, '+' + e.points, COL.mint, renderer.width);
-          if (e.points > CONFIG.haptics.bigComboPoints) vibrate(CONFIG.haptics.bigCombo);
+          const tier = hypeTier(e.points, CONFIG);
+          if (e.result === 'sketchy') holdCombo(e.chain, 'SKETCHY! +' + e.points, COL.orange, renderer.width, tier);
+          else holdCombo(e.chain, '+' + e.points, COL.mint, renderer.width, tier);
+          if (tier >= 0) hype(tier);
+          else playSfx('combo', { points: e.points });
+          if (tier >= CONFIG.haptics.gnarlyFrom) vibrate(CONFIG.haptics.gnarly);
+          else if (e.points > CONFIG.haptics.bigComboPoints) vibrate(CONFIG.haptics.bigCombo);
           if (e.points > CONFIG.render.flashPoints) game.flash = 1;
         }
         break;
@@ -768,6 +776,21 @@ function handleRunEvents(run) {
     }
   }
   evs.length = 0;
+}
+
+// Combo hype (CONFIG.hype): the tier's arpeggio (instead of the plain combo
+// sound), a hit-stop, and a zoom punch from SICK up.
+function hype(tier) {
+  playSfx('hype', { tier });
+  game.hitStop = CONFIG.hype.tiers[tier].hitStop;
+  if (tier >= CONFIG.hype.zoomFrom) game.zoomTime = CONFIG.hype.zoomTime;
+}
+
+// Zoom punch: 1 -> 1 + zoom -> 1 over zoomTime.
+function zoomScale() {
+  if (game.zoomTime <= 0) return 1;
+  const h = CONFIG.hype;
+  return 1 + h.zoom * Math.sin(Math.PI * (1 - game.zoomTime / h.zoomTime));
 }
 
 // --- Input ---------------------------------------------------------------------
@@ -850,10 +873,17 @@ function tick(dt) {
     case 'gameover':
       stepRun(game.run, dt, CONFIG); // the last bail slides to a stop
       updatePopups(dt, CONFIG);
-      updateCombo(dt, CONFIG);
+      updateCombo(dt, CONFIG, game.run.tricks);
       parts.update(dt);
       break;
     case 'play': {
+      if (game.zoomTime > 0) game.zoomTime = Math.max(0, game.zoomTime - dt);
+      // Hit-stop: the world holds still for a few frames. Input still lands
+      // (handleAction runs above), so a tap during it isn't lost.
+      if (game.hitStop > 0) {
+        game.hitStop--;
+        break;
+      }
       applyDebug(game.run);
       if (dbg.autopilot) {
         const a = bot.decide(game.run);
@@ -862,7 +892,7 @@ function tick(dt) {
       stepRun(game.run, dt, CONFIG);
       setMusicTier(game.run.world.tier);
       updatePopups(dt, CONFIG);
-      updateCombo(dt, CONFIG);
+      updateCombo(dt, CONFIG, game.run.tricks);
       grindSparks(game.run);
       parts.update(dt);
       checkNewBest(dt);
@@ -935,7 +965,7 @@ function render() {
     game.flash--;
   }
   if (debug.enabled) debug.draw(g, W, debugLines);
-  renderer.present();
+  renderer.present(game.state === 'play' ? zoomScale() : 1);
   const crt = crtOn();
   if (crt !== game.crt) {
     game.crt = crt;

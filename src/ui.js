@@ -55,11 +55,21 @@ export function drawHud(g, W, run, best, sprites, newBest) {
 
 // --- Combo chain ---------------------------------------------------------------
 // While a combo is live: the trick chain ("KICKFLIP + GRIND") and its value
-// with the multiplier ("220 x2"). After landing, the chain stays up for
+// with the multiplier ("220 x2"); the value pulses (2x, in the tier's colour)
+// each time it crosses a hype tier. After landing, the chain stays up for
 // CONFIG.ui.comboHoldTime with the result under it ("+220" / "SKETCHY! +110"),
-// unless a new combo with tricks takes its place.
+// and the tier word above the result for a combo that reached one, unless a
+// new combo with tricks takes its place.
 
 const COMBO_Y = 38;
+
+// Index of the highest hype tier (CONFIG.hype.tiers) at or under points, or -1.
+export function hypeTier(points, cfg) {
+  const tiers = cfg.hype.tiers;
+  let i = -1;
+  while (i + 1 < tiers.length && points >= tiers[i + 1].points) i++;
+  return i;
+}
 
 // Newest tricks win when the chain is too long for the screen.
 function chainText(chain, W) {
@@ -77,18 +87,32 @@ let liveLen = -1;
 let livePts = -1;
 let liveLine1 = '';
 let liveLine2 = '';
-const held = { line1: '', line2: '', color: '', age: 0, active: false };
+const held = { line1: '', line2: '', color: '', tier: -1, age: 0, active: false };
+const pulse = { tier: -1, age: 0 }; // highest tier the live combo has crossed
 
-// Called when a combo banks: keep its chain on screen with the result.
-export function holdCombo(chain, result, color, W) {
+// Called when a combo banks: keep its chain on screen with the result. tier:
+// hype tier index or -1.
+export function holdCombo(chain, result, color, W, tier = -1) {
   held.line1 = chainText(chain, W);
   held.line2 = result;
   held.color = color;
+  held.tier = tier;
   held.age = 0;
   held.active = true;
 }
 
-export function updateCombo(dt, cfg) {
+export function updateCombo(dt, cfg, s) {
+  if (s.live && s.comboTricks > 0) {
+    const tier = hypeTier(comboValue(s), cfg);
+    if (tier > pulse.tier) {
+      pulse.tier = tier;
+      pulse.age = 0;
+    } else {
+      pulse.age += dt;
+    }
+  } else {
+    pulse.tier = -1;
+  }
   if (!held.active) return;
   held.age += dt;
   if (held.age >= cfg.ui.comboHoldTime) held.active = false;
@@ -96,9 +120,12 @@ export function updateCombo(dt, cfg) {
 
 export function clearCombo() {
   held.active = false;
+  pulse.tier = -1;
 }
 
 export function drawCombo(g, W, s, cfg) {
+  const cx = W >> 1;
+  const shadow = { align: 'center', shadow: COL.ink };
   if (s.live && s.comboTricks > 0) {
     held.active = false;
     const value = comboValue(s);
@@ -108,16 +135,27 @@ export function drawCombo(g, W, s, cfg) {
       liveLine1 = chainText(s.chain, W);
       liveLine2 = value + ' x' + multiplier(s);
     }
-    drawText(g, liveLine1, W >> 1, COMBO_Y, COL.cream, { align: 'center', shadow: COL.ink });
-    drawText(g, liveLine2, W >> 1, COMBO_Y + 10, COL.gold, { align: 'center', shadow: COL.ink });
+    drawText(g, liveLine1, cx, COMBO_Y, COL.cream, shadow);
+    if (pulse.tier >= 0 && pulse.age < cfg.hype.pulseTime) {
+      const col = COL[cfg.hype.tiers[pulse.tier].color];
+      drawText(g, liveLine2, cx, COMBO_Y + 10, col, { align: 'center', scale: 2, shadow: COL.ink });
+    } else {
+      drawText(g, liveLine2, cx, COMBO_Y + 10, COL.gold, shadow);
+    }
     return;
   }
   if (!held.active) return;
   // Blink out over the last 20%.
   const hold = cfg.ui.comboHoldTime;
   if (held.age > hold * 0.8 && Math.floor(held.age * 16) % 2 === 1) return;
-  drawText(g, held.line1, W >> 1, COMBO_Y, COL.cream, { align: 'center', shadow: COL.ink });
-  drawText(g, held.line2, W >> 1, COMBO_Y + 10, held.color, { align: 'center', shadow: COL.ink });
+  drawText(g, held.line1, cx, COMBO_Y, COL.cream, shadow);
+  let y = COMBO_Y + 10;
+  if (held.tier >= 0) {
+    const t = cfg.hype.tiers[held.tier];
+    drawText(g, t.word, cx, y, COL[t.color], { align: 'center', scale: 2, shadow: COL.ink });
+    y += 18;
+  }
+  drawText(g, held.line2, cx, y, held.color, shadow);
 }
 
 // Big mid-screen banner ("NEW BEST!").

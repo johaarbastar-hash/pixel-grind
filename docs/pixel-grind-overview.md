@@ -97,6 +97,22 @@ Patterns from the current tier come up twice as often as older ones, and the sam
 - Repeating a trick in the same combo scores 50% the 2nd time and 25% after that.
 - The trick chain shows mid-screen while you're in the air ("KICKFLIP + GRIND  220 x2"). It stays up for 1 s after you land, with the result ("+440" or "SKETCHY! +220").
 
+### Combo hype tiers
+A combo that banks at or above a tier gets that tier's word drawn big above the result, in the tier's colour, with its own sound and a short freeze ("hit-stop"):
+
+| Tier | Points | Colour | Freeze |
+|---|---|---|---|
+| NICE | 300 | mint | 2 frames |
+| RAD | 600 | teal | 3 frames |
+| SICK | 1,000 | gold | 4 frames |
+| GNARLY | 2,500 | orange | 6 frames |
+| LEGENDARY | 5,000 | rose | 8 frames |
+
+- Each tier plays a rising arpeggio, longer and higher than the tier below, instead of the normal combo sound.
+- From SICK up, the screen also does a quick zoom punch (1.06x and back over 0.25 s).
+- Over 1,000 points there's a one-frame white flash and a vibration; from GNARLY up the vibration is longer.
+- While you're still in the air, the combo's running value pulses (big, in the tier's colour) each time it crosses a tier.
+
 ### Score
 - **Score = distance (1 point per metre) + banked combos + 50 per coin.**
 - **NEW BEST:** the moment a run passes the #1 score in the table, a big "NEW BEST!" banner shows for 1.2 s with a short fanfare (once per run). The high score at the top of the screen turns gold and follows your live score from then on.
@@ -194,7 +210,7 @@ A crash during the tutorial rewinds you to the last checkpoint instead of costin
 - **Effects:**
   - landing dust, grind sparks, coin sparkle, crash debris
   - screen shake and a freeze frame on crashes
-  - a white flash on combos over 1,000
+  - a white flash on combos over 1,000, and a freeze plus zoom punch for big combos (see "Combo hype tiers")
   - an optional CRT scanline effect
 - **Text:** a blocky 8 x 8 capitals-only font, with arrow symbols and a coin symbol.
 
@@ -206,11 +222,11 @@ A crash during the tutorial rewinds you to the last checkpoint instead of costin
 - **Sound effects:**
   - ollie pop, kicker launch, landing thud, wobbly sketchy landing, flip whoosh
   - grind clank and a looping grind scrape
-  - coin bling, a combo arpeggio that rises with bigger combos, crash
+  - coin bling, a combo arpeggio that rises with bigger combos (and a longer, higher one for each hype tier), crash
   - shop purchase jingle, menu blips, countdown beeps
   - a short sting when you pass your best, game-over jingle, high-score fanfare
 - **Music:** a looping chiptune (bass, lead, drums) that speeds up with each difficulty tier. It stops on pause and crash.
-- **Vibration (Android):** a short buzz on a crash and a double pulse on combos over 1,000.
+- **Vibration (Android):** a short buzz on a crash, a double pulse on combos over 1,000, and a longer pattern for GNARLY and LEGENDARY.
 
 ---
 

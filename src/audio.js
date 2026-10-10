@@ -157,6 +157,16 @@ export const SOUNDS = {
     v.tone('square', go ? 880 : 440, go ? 880 : 440, t, go ? 0.25 : 0.1, 0.08);
   },
   // Sad descending jingle.
+  // Combo hype: one more note, a step higher and a longer last note per tier
+  // (opts.tier 0-4: NICE ... LEGENDARY).
+  hype(v, t, { tier = 0 } = {}) {
+    const base = 72 + tier * 2;
+    const notes = [0, 4, 7, 12, 16, 19, 24, 28].slice(0, 3 + tier).map((n) => base + n);
+    const step = 0.05;
+    v.notes('pulse', notes.slice(0, -1), t, step, 0.07, 0.13);
+    const last = notes[notes.length - 1];
+    v.tone('pulse', midiHz(last), midiHz(last), t + step * (notes.length - 1), 0.1 + tier * 0.06, 0.13);
+  },
   gameOver(v, t) {
     v.notes('triangle', [67, 63, 60], t, 0.22, 0.2, 0.18);
     v.tone('triangle', midiHz(55), midiHz(55), t + 0.66, 0.6, 0.18);

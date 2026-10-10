@@ -175,6 +175,25 @@ export const CONFIG = {
     bail: 30, // ms buzz
     bigCombo: [40, 60, 40], // double pulse for combos over bigComboPoints
     bigComboPoints: 1000,
+    gnarly: [60, 40, 60, 40, 160], // longer pattern from hype tier gnarlyFrom up
+    gnarlyFrom: 3, // index in hype.tiers (GNARLY)
+  },
+
+  // Combo hype: a banked combo at or above a tier's points gets its word drawn
+  // big, a longer, higher arpeggio per tier and a hit-stop (frames at 60 Hz
+  // where the world freezes). Colours are palette names (COL in sprites.js).
+  hype: {
+    tiers: [
+      { points: 300, word: 'NICE', color: 'mint', hitStop: 2 },
+      { points: 600, word: 'RAD', color: 'teal', hitStop: 3 },
+      { points: 1000, word: 'SICK', color: 'gold', hitStop: 4 },
+      { points: 2500, word: 'GNARLY', color: 'orange', hitStop: 6 },
+      { points: 5000, word: 'LEGENDARY', color: 'rose', hitStop: 8 },
+    ],
+    zoomFrom: 2, // tier index (SICK) and up get a zoom punch
+    zoom: 0.06, // scale 1 -> 1 + this -> 1
+    zoomTime: 0.25, // s
+    pulseTime: 0.2, // s the live combo value pulses when it crosses a tier in the air
   },
 
   // Beating the #1 score in the high-score table during a run.

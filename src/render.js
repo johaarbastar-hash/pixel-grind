@@ -94,8 +94,16 @@ export function createRenderer(cfg, canvas, stage, overlay = null) {
   }
   window.addEventListener('resize', measureFallback);
 
-  function present() {
-    display.drawImage(buf, 0, 0, buf.width, H, 0, 0, canvas.width, canvas.height);
+  // zoom > 1 crops the middle of the frame and fills the screen with it (the
+  // combo zoom punch: briefly not whole-pixel, by design).
+  function present(zoom = 1) {
+    if (zoom === 1) {
+      display.drawImage(buf, 0, 0, buf.width, H, 0, 0, canvas.width, canvas.height);
+      return;
+    }
+    const sw = buf.width / zoom;
+    const sh = H / zoom;
+    display.drawImage(buf, (buf.width - sw) / 2, (H - sh) / 2, sw, sh, 0, 0, canvas.width, canvas.height);
   }
 
   // Page (CSS) coordinates to internal pixels, for on-screen buttons.
