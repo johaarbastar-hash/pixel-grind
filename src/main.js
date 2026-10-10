@@ -33,6 +33,7 @@ import {
   clearPopups,
   updatePopups,
   drawPopups,
+  drawBanner,
   drawShopScreen,
   shopHitAt,
 } from './ui.js';
@@ -128,6 +129,8 @@ const game = {
   shop: null, // shop screen: { from, tab, sel, items, preview, view, msg }
   installPrompt: null, // Android install prompt, when the browser offers one (M8)
   flash: 0, // frames of white flash left (big combos)
+  newBest: false, // this run has passed the #1 score (game.best)
+  bannerTime: 0, // s the NEW BEST! banner has left
   crt: null, // overlay currently shown
 };
 
@@ -213,6 +216,8 @@ function startRun(forceTutorial = false) {
   if (urlSpeed) run.world.speedOverride = urlSpeed;
   setRun(run);
   game.tutorial = tutorial ? { snap: cloneRun(run, CONFIG), cp: 0, retry: 0 } : null;
+  game.newBest = false;
+  game.bannerTime = 0;
   refreshScores();
   setState('play');
   playSfx('select');
@@ -233,6 +238,7 @@ function gameOver() {
     distance: run.world.distance,
     coins: run.coins,
     wallet: shop.wallet,
+    best: game.best,
     reason: run.bailReason,
     rank,
     msg: null,
@@ -251,6 +257,19 @@ function gameOver() {
     playSfx('gameOver');
     setState('gameover');
   }
+}
+
+// --- NEW BEST --------------------------------------------------------------------
+// Passing the #1 score in the table (the made-up PXG 5000 counts until it's
+// beaten): a banner, a short sting (once per run), and the HUD hi-score turns
+// gold and follows the live score.
+
+function checkNewBest(dt) {
+  if (game.bannerTime > 0) game.bannerTime = Math.max(0, game.bannerTime - dt);
+  if (game.newBest || game.run.score <= game.best) return;
+  game.newBest = true;
+  game.bannerTime = CONFIG.best.bannerTime;
+  playSfx('best');
 }
 
 // --- Pause, countdown ----------------------------------------------------------------
@@ -846,6 +865,7 @@ function tick(dt) {
       updateCombo(dt, CONFIG);
       grindSparks(game.run);
       parts.update(dt);
+      checkNewBest(dt);
       if (game.tutorial) updateTutorial(dt);
       else if (game.run.over && game.run.downTime >= CONFIG.bail.gameOverDelay) gameOver();
       break;
@@ -879,13 +899,17 @@ function render() {
       s.view.msg = s.msg && game.stateTime - s.msg.at < CONFIG.shop.msgTime ? s.msg : null;
       drawShopScreen(g, W, H, game.stateTime, s.view, sprites, CONFIG);
     } else {
-      drawHud(g, W, run, game.best, sprites);
-      drawCombo(g, W, run.tricks, CONFIG);
-      if (game.tutorial && !run.down) {
-        const lines = tutorialPrompt(run.world.distance, game.touch);
-        if (lines) drawPrompt(g, W, lines);
+      // The end-of-run screens have the numbers themselves.
+      if (game.state !== 'initials' && game.state !== 'gameover') {
+        drawHud(g, W, run, game.best, sprites, game.newBest);
+        drawCombo(g, W, run.tricks, CONFIG);
+        if (game.tutorial && !run.down) {
+          const lines = tutorialPrompt(run.world.distance, game.touch);
+          if (lines) drawPrompt(g, W, lines);
+        }
+        drawPopups(g, W, CONFIG);
+        if (game.bannerTime > 0) drawBanner(g, W, 'NEW BEST!', COL.gold);
       }
-      drawPopups(g, W, CONFIG);
       switch (game.state) {
         case 'paused':
           drawPauseMenu(g, W, H, MENU.map((m) => m.label()), game.menuSel, sprites);

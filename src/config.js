@@ -177,6 +177,11 @@ export const CONFIG = {
     bigComboPoints: 1000,
   },
 
+  // Beating the #1 score in the high-score table during a run.
+  best: {
+    bannerTime: 1.2, // s the NEW BEST! banner stays up
+  },
+
   ui: {
     blinkPeriod: 0.5, // s per on/off phase of blinking prompts
     rollFrameTime: 0.12, // s per rolling animation frame

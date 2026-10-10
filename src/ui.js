@@ -28,7 +28,9 @@ export function hitPauseButton(x, y, W) {
   return x >= W - PAUSE_HIT_W && x <= W && y >= 0 && y <= PAUSE_HIT_H;
 }
 
-export function drawHud(g, W, run, best, sprites) {
+// newBest: the run has passed the #1 score, so the hi-score shows the live
+// score in gold.
+export function drawHud(g, W, run, best, sprites, newBest) {
   if (run.score !== hudScore) {
     hudScore = run.score;
     hudText = pad(run.score);
@@ -44,7 +46,7 @@ export function drawHud(g, W, run, best, sprites) {
   }
   drawText(g, hudText, 4, 4, COL.cream, { shadow: COL.ink });
   drawText(g, hudCoinText, 4, 14, COL.gold, { shadow: COL.ink });
-  drawText(g, hudHiText, W >> 1, 4, COL.steel, { align: 'center', shadow: COL.ink });
+  drawText(g, hudHiText, W >> 1, 4, newBest ? COL.gold : COL.steel, { align: 'center', shadow: COL.ink });
   const icon = sprites.pauseIcon;
   g.drawImage(icon, W - icon.width - 3, 3);
   const b = sprites.boardIcon;
@@ -117,6 +119,14 @@ export function drawCombo(g, W, s, cfg) {
   drawText(g, held.line1, W >> 1, COMBO_Y, COL.cream, { align: 'center', shadow: COL.ink });
   drawText(g, held.line2, W >> 1, COMBO_Y + 10, held.color, { align: 'center', shadow: COL.ink });
 }
+
+// Big mid-screen banner ("NEW BEST!").
+export function drawBanner(g, W, text, color) {
+  drawText(g, text, W >> 1, 84, color, { align: 'center', scale: 2, shadow: COL.ink });
+}
+
+// Numbers in messages: 4,120.
+export const fmt = (n) => Math.round(n).toLocaleString('en-US');
 
 function blinkOn(t, cfg) {
   return Math.floor(t / cfg.ui.blinkPeriod) % 2 === 0;
@@ -320,20 +330,33 @@ export function gameOverButtonAt(x, y, W) {
   return null;
 }
 
-// result: { score, bestCombo, distance (px), coins, wallet, reason, rank
-// (-1 = not in top 10), msg }
+// Under the score, in this order; lines that don't apply are left out (up to
+// 7 fit). result: { score, bestCombo, distance (px), coins, wallet, best (the
+// #1 score before this run), reason, rank (-1 = not in top 10), msg }
+function gameOverLines(r) {
+  const lines = [];
+  if (r.score > r.best) lines.push(['NEW BEST BY ' + fmt(r.score - r.best), COL.gold]);
+  else if (r.score === r.best) lines.push(['TIED YOUR BEST', COL.cream]);
+  else lines.push([fmt(r.best - r.score) + ' SHORT OF YOUR BEST', COL.steel]);
+  lines.push([`BEST COMBO ${r.bestCombo}   DISTANCE ${Math.floor(r.distance / 10)}M`, COL.cream]);
+  lines.push([`COINS +${r.coins}   WALLET ¤${r.wallet}`, COL.gold]);
+  // Rank 1 is already announced by NEW BEST.
+  if (r.rank > 0) lines.push(['RANK ' + (r.rank + 1) + ' OF 10', COL.gold]);
+  return lines;
+}
+
 export function drawGameOverScreen(g, W, H, t, result, canRetry, touch, pressed, sprites, cfg) {
   const cx = W >> 1;
   g.drawImage(sprites.checker, 0, 0);
-  drawText(g, 'GAME OVER', cx, 14, COL.rose, { align: 'center', scale: 2, shadow: COL.ink });
-  drawText(g, BAIL_REASON[result.reason] || '', cx, 34, COL.steel, center);
-  drawText(g, 'SCORE ' + result.score, cx, 48, COL.cream, center);
-  drawText(g, 'BEST COMBO ' + result.bestCombo, cx, 59, COL.cream, center);
-  drawText(g, 'DISTANCE ' + Math.floor(result.distance / 10) + 'M', cx, 70, COL.cream, center);
-  drawText(g, `COINS +${result.coins}   WALLET ¤${result.wallet}`, cx, 81, COL.gold, center);
-  if (result.rank === 0) drawText(g, 'NEW HIGH SCORE!', cx, 98, COL.gold, center);
-  else if (result.rank > 0) drawText(g, 'RANK ' + (result.rank + 1) + ' OF 10', cx, 98, COL.gold, center);
-  if (result.msg) drawText(g, result.msg, cx, 112, COL.mint, center);
+  drawText(g, 'GAME OVER', cx, 6, COL.rose, { align: 'center', scale: 2, shadow: COL.ink });
+  drawText(g, BAIL_REASON[result.reason] || '', cx, 25, COL.steel, center);
+  drawText(g, 'SCORE ' + fmt(result.score), cx, 36, COL.cream, center);
+  let y = 47;
+  for (const [text, col] of gameOverLines(result)) {
+    drawText(g, text, cx, y, col, center);
+    y += 10;
+  }
+  if (result.msg) drawText(g, result.msg, cx, 117, COL.mint, center);
   const b = GAMEOVER_BUTTONS(W);
   drawButton(g, b.share, 'SHARE', pressed === 'share');
   drawButton(g, b.shop, 'SHOP', pressed === 'shop');

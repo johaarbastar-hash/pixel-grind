@@ -161,6 +161,11 @@ export const SOUNDS = {
     v.notes('triangle', [67, 63, 60], t, 0.22, 0.2, 0.18);
     v.tone('triangle', midiHz(55), midiHz(55), t + 0.66, 0.6, 0.18);
   },
+  // Short sting the moment a run passes the #1 score.
+  best(v, t) {
+    v.notes('pulse', [79, 83, 86], t, 0.06, 0.06, 0.1);
+    v.tone('square', midiHz(91), midiHz(91), t + 0.18, 0.22, 0.08);
+  },
   // New high score fanfare.
   fanfare(v, t) {
     v.notes('pulse', [72, 76, 79, 84], t, 0.09, 0.08, 0.08);
@@ -305,10 +310,11 @@ export function unlockAudio() {
   }
 }
 
+// opts are passed to the sound; opts.delay (s) starts it later.
 export function playSfx(name, opts) {
   if (!ctx || muted || ctx.state !== 'running') return;
   try {
-    SOUNDS[name](sfxVoices, ctx.currentTime + 0.005, opts);
+    SOUNDS[name](sfxVoices, ctx.currentTime + 0.005 + ((opts && opts.delay) || 0), opts);
   } catch {
     // never let a sound break the game
   }
