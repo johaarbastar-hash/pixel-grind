@@ -1,13 +1,14 @@
 // Fixed-timestep loop and the state machine.
 // States: boot -> start (title + demo run) -> play <-> paused -> countdown ->
-// play ... -> initials (top 10 only) -> gameover -> play / start.
+// play ... -> initials (top 10 only) -> gameover -> play / start. The shop
+// opens from the title or the game-over screen and goes back to it.
 // Portrait on a phone overrides everything with the rotate screen.
 
 import { CONFIG } from './config.js';
 import { randomSeed } from './rng.js';
 import { createInput } from './input.js';
 import { createRenderer, drawWorld, createParticles } from './render.js';
-import { buildSprites, COL } from './sprites.js';
+import { buildSprites, buildSkater, buildSkaterTile, COL } from './sprites.js';
 import { createRun, cloneRun, runPress, runFlip, stepRun } from './run.js';
 import {
   drawHud,
@@ -32,6 +33,8 @@ import {
   clearPopups,
   updatePopups,
   drawPopups,
+  drawShopScreen,
+  shopHitAt,
 } from './ui.js';
 import { createDebug, drawHitboxes, reportError } from './debug.js';
 import { isPortrait, isTouchDevice, enterFullscreenLandscape } from './device.js';
@@ -57,6 +60,8 @@ import { SEGMENTS } from './segments.js';
 import { TUTORIAL, tutorialPrompt } from './tutorial.js';
 import { createBot } from './bot.js';
 import { getSetting, setSetting, getScores, scoreRank, addScore, getStats, recordRun } from './storage.js';
+import { createShop } from './shop.js';
+import { SLOTS, SLOT_NAMES, itemsIn, lookFor } from './gear.js';
 
 /* global __BUILD_ID__ */
 const BUILD = typeof __BUILD_ID__ !== 'undefined' ? __BUILD_ID__ : 'DEV';
@@ -76,7 +81,8 @@ const replay = !!(params.has('tier') || urlSpeed || urlSeg);
 const crtEl = document.getElementById('crt');
 const renderer = createRenderer(CONFIG, document.getElementById('screen'), document.getElementById('stage'), crtEl);
 const parts = createParticles(CONFIG.render.particles);
-const sprites = buildSprites(CONFIG);
+const shop = createShop(CONFIG);
+const sprites = buildSprites(CONFIG, shop.gear);
 const input = createInput(CONFIG);
 const debug = createDebug(CONFIG, params.get('debug') === '1');
 configureAudio(CONFIG, { muted: getSetting('muted', false) });
@@ -119,6 +125,7 @@ const game = {
   entry: null, // initials being entered
   pressed: null, // game-over / title button held down
   titleData: null, // scores and stats for the title panels
+  shop: null, // shop screen: { from, tab, sel, items, preview, view, msg }
   installPrompt: null, // Android install prompt, when the browser offers one (M8)
   flash: 0, // frames of white flash left (big combos)
   crt: null, // overlay currently shown
@@ -138,6 +145,7 @@ function refreshScores() {
     build: BUILD,
     scores: getScores(),
     stats: getStats(),
+    wallet: shop.wallet,
     installable: !!game.installPrompt,
   };
 }
@@ -216,12 +224,15 @@ function gameOver() {
   stopMusic();
   grindLoop(false);
   const run = game.run;
-  recordRun({ distance: run.world.distance, bestCombo: run.tricks.best, tricks: run.tricks.landed });
+  shop.save();
+  recordRun({ distance: run.world.distance, bestCombo: run.tricks.best, tricks: run.tricks.landed, coins: run.coins });
   const rank = scoreRank(run.score);
   game.result = {
     score: run.score,
     bestCombo: run.tricks.best,
     distance: run.world.distance,
+    coins: run.coins,
+    wallet: shop.wallet,
     reason: run.bailReason,
     rank,
     msg: null,
@@ -243,10 +254,13 @@ function gameOver() {
 }
 
 // --- Pause, countdown ----------------------------------------------------------------
-// Music and the grind loop stop on pause, bail and game over.
+// Music and the grind loop stop on pause, bail and game over. Pausing also
+// saves the wallet (coins are added in memory as they are picked up), so
+// leaving the app or quitting a run keeps them.
 
 function pause() {
   if (game.state !== 'play' && game.state !== 'countdown') return;
+  shop.save();
   setState('paused');
   game.menuSel = 0;
   stopMusic();
@@ -402,6 +416,7 @@ function handleGameOver(a) {
     if (input.lastSource === 'pointer' && buttonAt() !== pressed) return;
     playSfx('select');
     if (pressed === 'share') share();
+    else if (pressed === 'shop') openShop();
     else toTitle();
   }
 }
@@ -413,12 +428,17 @@ function handleTitle(a) {
     game.pressed = input.lastSource === 'pointer' ? titleButtonAt(p.x, p.y, renderer.width, !!game.installPrompt) : null;
   } else if (a === 'release' && game.armed) {
     game.armed = false;
-    if (game.pressed === 'install') {
-      game.pressed = null;
-      installApp();
-      return;
+    const pressed = game.pressed;
+    game.pressed = null;
+    if (pressed && input.lastSource === 'pointer') {
+      const p = internal();
+      if (titleButtonAt(p.x, p.y, renderer.width, !!game.installPrompt) !== pressed) return;
     }
-    startRun();
+    if (pressed === 'install') installApp();
+    else if (pressed === 'shop') {
+      playSfx('select');
+      openShop();
+    } else startRun();
   }
 }
 
@@ -429,6 +449,143 @@ function installApp() {
   refreshScores();
   prompt.prompt();
   prompt.userChoice.catch(() => {});
+}
+
+// --- Shop ------------------------------------------------------------------------
+// Tabs for the gear slots, a tile per item. Tap a tile to try it on in the
+// preview, then BUY (which also puts it on) or EQUIP. Swipes / arrow keys:
+// left-right picks an item, up-down a tab.
+
+function openShop() {
+  game.shop = { from: game.state, tab: 0, sel: 0, items: null, preview: null, view: null, msg: null };
+  setState('shop');
+  selectShopTab(0);
+}
+
+function closeShop() {
+  const from = game.shop.from;
+  game.shop = null;
+  if (from === 'gameover') {
+    game.result.wallet = shop.wallet;
+    setState('gameover');
+  } else {
+    refreshScores();
+    setState('start');
+  }
+}
+
+// The skater in the worn gear with one item swapped in.
+const tryOn = (it) => lookFor({ ...shop.gear, [it.slot]: it.id });
+
+function selectShopTab(tab) {
+  const s = game.shop;
+  s.tab = (tab + SLOTS.length) % SLOTS.length;
+  const slot = SLOTS[s.tab];
+  s.items = itemsIn(slot).map((it) => ({ it, tile: buildSkaterTile(tryOn(it), slot === 'board') }));
+  selectShopItem(Math.max(0, s.items.findIndex((e) => shop.wearing(e.it.id))));
+}
+
+function selectShopItem(i) {
+  const s = game.shop;
+  s.sel = (i + s.items.length) % s.items.length;
+  s.preview = buildSkater(tryOn(s.items[s.sel].it));
+  s.msg = null;
+  updateShopView();
+}
+
+// What the shop screen draws (see drawShopScreen), rebuilt on every change.
+function updateShopView() {
+  const s = game.shop;
+  const it = s.items[s.sel].it;
+  const price = shop.price(it);
+  let action;
+  if (shop.wearing(it.id)) action = { label: 'EQUIPPED', disabled: true };
+  else if (shop.owns(it.id)) action = { label: 'EQUIP', disabled: false };
+  else action = { label: 'BUY ¤' + price, disabled: shop.wallet < price };
+  s.view = {
+    tabs: SLOTS.map((slot) => SLOT_NAMES[slot]),
+    tab: s.tab,
+    items: s.items.map((e) => ({
+      name: e.it.name,
+      price: shop.price(e.it),
+      owned: shop.owns(e.it.id),
+      worn: shop.wearing(e.it.id),
+      tile: e.tile,
+    })),
+    sel: s.sel,
+    wallet: shop.wallet,
+    preview: s.preview,
+    action,
+    msg: null,
+    pressed: null,
+  };
+}
+
+function shopMessage(text, color) {
+  game.shop.msg = { text, color, at: game.stateTime };
+}
+
+function shopAction() {
+  const s = game.shop;
+  const it = s.items[s.sel].it;
+  if (shop.wearing(it.id)) return;
+  let msg = null;
+  if (shop.owns(it.id)) {
+    shop.wear(it.id);
+    playSfx('select');
+  } else if (shop.buy(it.id)) {
+    playSfx('buy');
+    msg = 'BOUGHT ' + it.name + '!';
+  } else {
+    playSfx('blip');
+    shopMessage('NOT ENOUGH COINS', COL.rose);
+    return;
+  }
+  sprites.skater = buildSkater(lookFor(shop.gear));
+  selectShopTab(s.tab); // tiles show the other slots as worn
+  if (msg) shopMessage(msg, COL.mint);
+}
+
+function handleShop(a) {
+  const s = game.shop;
+  const hit = () => {
+    const p = internal();
+    return shopHitAt(p.x, p.y, renderer.width, SLOTS.length, s.items.length);
+  };
+  if (a === 'flipL' || a === 'flipR') {
+    selectShopItem(s.sel + (a === 'flipR' ? 1 : -1));
+    playSfx('blip');
+  } else if (a === 'flipU' || a === 'flipD') {
+    selectShopTab(s.tab + (a === 'flipD' ? 1 : -1));
+    playSfx('blip');
+  } else if (a === 'press') {
+    game.armed = true;
+    game.pressed = input.lastSource === 'pointer' ? hit() : 'action';
+  } else if (a === 'release' && game.armed) {
+    game.armed = false;
+    const pressed = game.pressed;
+    game.pressed = null;
+    if (!pressed) return;
+    if (input.lastSource === 'pointer' && (input.releaseWasSwipe || hit() !== pressed)) return;
+    if (pressed === 'back') {
+      playSfx('select');
+      closeShop();
+    } else if (pressed === 'action') {
+      shopAction();
+    } else if (pressed.startsWith('tab:')) {
+      const tab = Number(pressed.slice(4));
+      if (tab !== s.tab) {
+        selectShopTab(tab);
+        playSfx('blip');
+      }
+    } else {
+      const i = Number(pressed.slice(5));
+      if (i !== s.sel) {
+        selectShopItem(i);
+        playSfx('blip');
+      }
+    }
+  }
 }
 
 // --- Tutorial ----------------------------------------------------------------------
@@ -507,7 +664,7 @@ tuning.setButtonVisible(debug.enabled);
 
 const DUST = [COL.steel, COL.cream, COL.slate];
 const SPARKS = [COL.gold, COL.white, COL.orange];
-const TOKEN_SPARKLE = [COL.gold, COL.cream, COL.white];
+const COIN_SPARKLE = [COL.gold, COL.cream, COL.white];
 const DEBRIS = [COL.rose, COL.teal, COL.gold, COL.indigo];
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
 const skaterCentreX = (run) => run.world.distance + CONFIG.world.skaterX + CONFIG.skater.spriteW / 2;
@@ -562,9 +719,10 @@ function handleRunEvents(run) {
       case 'grindEnd':
         grindLoop(false);
         break;
-      case 'token':
-        playSfx('token');
-        burst(e.x, e.y, 6, 50, 0.3, TOKEN_SPARKLE, 0);
+      case 'coin':
+        shop.addCoins(1);
+        playSfx('coin');
+        burst(e.x, e.y, 6, 50, 0.3, COIN_SPARKLE, 0);
         break;
       case 'land':
         playSfx(e.result === 'sketchy' ? 'sketchy' : 'land');
@@ -587,10 +745,6 @@ function handleRunEvents(run) {
         break;
       case 'respawn':
         startMusic();
-        break;
-      case 'extraBoard':
-        playSfx('extraBoard');
-        addPopup('EXTRA BOARD!', COL.mint);
         break;
     }
   }
@@ -617,6 +771,7 @@ function handleAction(a) {
     if (game.state === 'play' || game.state === 'countdown') pause();
     else if (game.state === 'paused' && !game.portrait) resume();
     else if (game.state === 'gameover') toTitle();
+    else if (game.state === 'shop') closeShop();
     return;
   }
   if (game.portrait) return;
@@ -637,6 +792,9 @@ function handleAction(a) {
       break;
     case 'start':
       handleTitle(a);
+      break;
+    case 'shop':
+      handleShop(a);
       break;
     case 'boot':
       // Tap skips the boot text.
@@ -662,6 +820,9 @@ function tick(dt) {
       break;
     case 'start':
       updateDemo(dt);
+      break;
+    case 'shop':
+      if (game.shop.from === 'start') updateDemo(dt); // the demo plays on behind
       break;
     case 'countdown':
       updateCountdown();
@@ -711,7 +872,12 @@ function render() {
     if (debug.enabled) drawHitboxes(g, W, run);
     if (game.state === 'start') {
       const panel = Math.floor(game.stateTime / CONFIG.attract.panelTime) % TITLE_PANELS;
-      drawTitleScreen(g, W, H, game.stateTime, panel, game.titleData, CONFIG);
+      drawTitleScreen(g, W, H, game.stateTime, panel, game.titleData, game.pressed, CONFIG);
+    } else if (game.state === 'shop') {
+      const s = game.shop;
+      s.view.pressed = game.pressed;
+      s.view.msg = s.msg && game.stateTime - s.msg.at < CONFIG.shop.msgTime ? s.msg : null;
+      drawShopScreen(g, W, H, game.stateTime, s.view, sprites, CONFIG);
     } else {
       drawHud(g, W, run, game.best, sprites);
       drawCombo(g, W, run.tricks, CONFIG);
@@ -773,7 +939,7 @@ function debugLines(d) {
       `SPD ${run.world.speed.toFixed(0)} DIST ${run.world.distance.toFixed(0)}`,
       `FLIP ${flip} Q ${p.queued ? p.queued.toUpperCase() : '-'}`,
       `TIER ${run.world.tier} SEG ${segmentAhead(run).toUpperCase()}`,
-      `BOARDS ${run.boards} TOKENS ${run.tokenPoints / CONFIG.tokens.points} INV ${run.invuln.toFixed(1)}`,
+      `BOARDS ${run.boards} COINS ${run.coins} WALLET ${shop.wallet} INV ${run.invuln.toFixed(1)}`,
       `SEED ${run.seed}`,
     );
   }
@@ -864,6 +1030,8 @@ window.addEventListener('pagehide', pause);
 if (debug.enabled) {
   window.__pixelGrind = {
     game,
+    shop,
+    sprites,
     config: CONFIG,
     tuning,
     dbg,

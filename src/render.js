@@ -217,13 +217,13 @@ export function drawWorld(g, W, run, sprites, cfg, parts) {
     g.drawImage(sprites.obstacle(ob), sx, ob.y);
   }
 
-  const tokens = run.world.tokens;
-  const spin = sprites.token[Math.floor(run.time / cfg.tokens.spinFrameTime) % sprites.token.length];
-  const half = cfg.tokens.size / 2;
-  for (let i = 0; i < tokens.length; i++) {
-    const sx = tokens[i].x - half - camX;
+  const coins = run.world.coins;
+  const spin = sprites.coin[Math.floor(run.time / cfg.coins.spinFrameTime) % sprites.coin.length];
+  const half = cfg.coins.size / 2;
+  for (let i = 0; i < coins.length; i++) {
+    const sx = coins[i].x - half - camX;
     if (sx >= W) break;
-    if (sx > -cfg.tokens.size) g.drawImage(spin, sx, tokens[i].y - half);
+    if (sx > -cfg.coins.size) g.drawImage(spin, sx, coins[i].y - half);
   }
 
   // Blinks while invulnerable after a respawn.

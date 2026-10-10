@@ -104,19 +104,28 @@ export const CONFIG = {
     repeatFactors: [1, 0.5, 0.25],
   },
 
-  tokens: {
+  // Coins go in the wallet (spent in the shop) and each also adds points to the score.
+  coins: {
     points: 50, // added straight to the score
     size: 8, // px, pickup box
-    spacing: 20, // px between tokens along a rail or ledge
-    arc: [0.3, 0.5, 0.7], // fractions of ollie airtime: tokens along the arc over an obstacle
-    kickerArc: [0.4, 0.5, 0.6], // fractions of kicker airtime: tokens around the kicker apex
+    spacing: 20, // px between coins along a rail or ledge
+    arc: [0.3, 0.5, 0.7], // fractions of ollie airtime: coins along the arc over an obstacle
+    kickerArc: [0.4, 0.5, 0.6], // fractions of kicker airtime: coins around the kicker apex
     spinFrameTime: 0.1, // s per spin frame
   },
 
   lives: {
-    start: 3, // boards
-    max: 5,
-    extraEvery: 10000, // points per extra board
+    start: 3, // boards per run; there are no extra boards
+  },
+
+  // Gear prices in coins, by item tier (items are listed in gear.js). A run
+  // collects roughly 50-100 coins.
+  shop: {
+    prices: { free: 0, cheap: 100, mid: 300, high: 750, top: 2000 },
+    previewRide: 2.0, // s the shop preview rides before showing a kickflip
+    previewFlip: 0.5, // s of the preview's kickflip
+    previewHop: 10, // px the preview hops for the kickflip (before 2x)
+    msgTime: 1.5, // s a shop message ("NOT ENOUGH COINS") stays up
   },
 
   bail: {

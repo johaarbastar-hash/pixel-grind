@@ -76,16 +76,17 @@ export function addScore(name, score) {
 // --- Stats -------------------------------------------------------------------
 
 export function getStats() {
-  return { runs: 0, distance: 0, bestCombo: 0, tricks: 0, ...load().stats };
+  return { runs: 0, distance: 0, bestCombo: 0, tricks: 0, coins: 0, ...load().stats };
 }
 
-// distance in px; tricks = flips and grinds landed.
-export function recordRun({ distance, bestCombo, tricks }) {
+// distance in px; tricks = flips and grinds landed; coins picked up.
+export function recordRun({ distance, bestCombo, tricks, coins }) {
   const s = getStats();
   s.runs++;
   s.distance += Math.round(distance);
   s.bestCombo = Math.max(s.bestCombo, bestCombo);
   s.tricks += tricks;
+  s.coins += coins;
   load().stats = s;
   save();
 }

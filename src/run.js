@@ -4,7 +4,8 @@
 //
 // Bails: the skater goes down (run.down), loses a board, and respawns after
 // CONFIG.bail.respawnDelay with the road ahead cleared and a moment of
-// invulnerability. With no boards left the run is over (run.over).
+// invulnerability. With no boards left the run is over (run.over). There are
+// no extra boards: every run gets CONFIG.lives.start.
 //
 // UI-facing happenings are pushed to run.events (drained by main.js):
 //   { type: 'launch', kind }                   ollie / pop ('ollie') or kicker
@@ -14,8 +15,7 @@
 //   { type: 'land', result, points, tricks, chain }   combo banked on the ground
 //   { type: 'bail', reason }                   went down
 //   { type: 'respawn' }
-//   { type: 'token', x, y }                    picked up a token
-//   { type: 'extraBoard' }
+//   { type: 'coin', x, y }                     picked up a coin (main.js adds it to the wallet)
 
 import { createRng } from './rng.js';
 import { createWorld, cloneWorld, updateWorld, stopWorld } from './world.js';
@@ -38,9 +38,8 @@ export function createRun(cfg, seed, opts = {}) {
     ticks: 0,
     time: 0,
     score: 0,
-    tokenPoints: 0,
+    coins: 0, // picked up this run
     boards: cfg.lives.start,
-    nextExtra: cfg.lives.extraEvery, // score for the next extra board
     down: false, // bailed, waiting to respawn
     downTime: 0,
     over: false, // no boards left
@@ -230,16 +229,16 @@ export function runFlip(run, action, cfg) {
   handlePlayerEvents(run, cfg);
 }
 
-function collectTokens(run, hb, cfg) {
-  const list = run.world.tokens;
-  const half = cfg.tokens.size / 2;
+function collectCoins(run, hb, cfg) {
+  const list = run.world.coins;
+  const half = cfg.coins.size / 2;
   for (let i = 0; i < list.length; i++) {
     const t = list[i];
     if (t.x - half > hb.x + hb.w) break;
     if (t.x + half > hb.x && t.y + half > hb.y && t.y - half < hb.y + hb.h) {
       list.splice(i--, 1);
-      run.tokenPoints += cfg.tokens.points;
-      run.events.push({ type: 'token', x: t.x, y: t.y });
+      run.coins++;
+      run.events.push({ type: 'coin', x: t.x, y: t.y });
     }
   }
 }
@@ -282,14 +281,8 @@ export function stepRun(run, dt, cfg) {
       }
     }
   }
-  collectTokens(run, hb, cfg);
+  collectCoins(run, hb, cfg);
 
-  run.score = Math.floor(run.world.distance / cfg.score.pxPerPoint) + run.tricks.banked + run.tokenPoints;
-  while (run.score >= run.nextExtra) {
-    run.nextExtra += cfg.lives.extraEvery;
-    if (run.boards < cfg.lives.max) {
-      run.boards++;
-      run.events.push({ type: 'extraBoard' });
-    }
-  }
+  run.score =
+    Math.floor(run.world.distance / cfg.score.pxPerPoint) + run.tricks.banked + run.coins * cfg.coins.points;
 }

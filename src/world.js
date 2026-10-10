@@ -34,7 +34,7 @@ export function createWorld(cfg, rng, { spawn = true, script = null } = {}) {
     tier: 1,
     decel: 0,
     obstacles: [], // sorted by x
-    tokens: [], // { x, y } centres, sorted by x; collected ones are removed
+    coins: [], // { x, y } centres, sorted by x; collected ones are removed
     speedScale: 1, // dips after a bail, recovers over time
     nextSpawnX: script ? script.length : cfg.world.startSpeed * cfg.spawn.openingClear + cfg.view.maxWidth,
     lastSeg: null,
@@ -46,7 +46,7 @@ export function createWorld(cfg, rng, { spawn = true, script = null } = {}) {
 }
 
 export function cloneWorld(w) {
-  return { ...w, rng: cloneRng(w.rng), obstacles: w.obstacles.slice(), tokens: w.tokens.slice() };
+  return { ...w, rng: cloneRng(w.rng), obstacles: w.obstacles.slice(), coins: w.coins.slice() };
 }
 
 export function inScript(w) {
@@ -82,7 +82,7 @@ function spawnAhead(w, cfg) {
       const it = items[w.scriptIndex++];
       const ob = makeObstacle(it.type, it.x, cfg, it.w, 'tutorial');
       insert(w.obstacles, ob);
-      addTokens(w, ob, cfg.world.startSpeed, cfg);
+      addCoins(w, ob, cfg.world.startSpeed, cfg);
     }
   }
   while (w.nextSpawnX < horizon) spawnSegment(w, cfg);
@@ -104,7 +104,7 @@ function spawnSegment(w, cfg) {
     const width = it.type === 'gap' ? Math.round(it.w * stretch) : it.w;
     const ob = makeObstacle(it.type, x, cfg, width, seg.id);
     insert(w.obstacles, ob);
-    addTokens(w, ob, speed, cfg);
+    addCoins(w, ob, speed, cfg);
     const tail = (cfg.spawn.tail[it.type] || 0) * speed;
     end = Math.max(end, x + ob.w + tail);
   }
@@ -112,12 +112,12 @@ function spawnSegment(w, cfg) {
   w.nextSpawnX = end + space * speed;
 }
 
-// Tokens on the ideal line, so they quietly teach the route: along rails and
+// Coins on the ideal line, so they quietly teach the route: along rails and
 // ledges at grind height, along a centred ollie arc over everything else you
 // jump, and around the kicker apex. Positions are where the skater's hitbox
 // centre passes (10 px above the feet).
-function addToken(w, x, y) {
-  const list = w.tokens;
+function addCoin(w, x, y) {
+  const list = w.coins;
   for (let i = list.length - 1; i >= 0 && list[i].x > x - 12; i--) {
     if (Math.abs(list[i].x - x) < 10 && Math.abs(list[i].y - y) < 10) return; // overlapping arcs
   }
@@ -126,18 +126,18 @@ function addToken(w, x, y) {
   list.splice(i, 0, { x: Math.round(x), y: Math.round(y) });
 }
 
-function addTokens(w, ob, speed, cfg) {
-  const t = cfg.tokens;
+function addCoins(w, ob, speed, cfg) {
+  const t = cfg.coins;
   const groundY = cfg.world.groundY;
   const g = gravity(cfg);
   if (ob.grind) {
-    for (let x = ob.x + 12; x < ob.x + ob.w - 6; x += t.spacing) addToken(w, x, ob.y - 10);
+    for (let x = ob.x + 12; x < ob.x + ob.w - 6; x += t.spacing) addCoin(w, x, ob.y - 10);
   } else if (ob.type === 'kicker') {
     const T = cfg.physics.kickerAirtime;
     const v = launchSpeed(cfg, T);
     for (const f of t.kickerArc) {
       const s = f * T;
-      addToken(w, ob.x + ob.w + speed * s, groundY - ob.h - (v * s - 0.5 * g * s * s) - 10);
+      addCoin(w, ob.x + ob.w + speed * s, groundY - ob.h - (v * s - 0.5 * g * s * s) - 10);
     }
   } else {
     const T = cfg.physics.ollieAirtime;
@@ -145,7 +145,7 @@ function addTokens(w, ob, speed, cfg) {
     const takeoff = ob.x + ob.w / 2 - (speed * T) / 2;
     for (const f of t.arc) {
       const s = f * T;
-      addToken(w, takeoff + speed * s, groundY - (v * s - 0.5 * g * s * s) - 10);
+      addCoin(w, takeoff + speed * s, groundY - (v * s - 0.5 * g * s * s) - 10);
     }
   }
 }
@@ -156,8 +156,8 @@ function cull(w, cfg) {
   let n = 0;
   while (n < list.length && list[n].x + list[n].w < limit) n++;
   if (n > 0) list.splice(0, n);
-  const tokens = w.tokens;
+  const coins = w.coins;
   n = 0;
-  while (n < tokens.length && tokens[n].x < limit) n++;
-  if (n > 0) tokens.splice(0, n);
+  while (n < coins.length && coins[n].x < limit) n++;
+  if (n > 0) coins.splice(0, n);
 }

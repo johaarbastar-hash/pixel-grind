@@ -1,5 +1,5 @@
-// HUD and full-screen prompts (title, game over, pause, rotate), combo chain,
-// popups.
+// HUD and full-screen prompts (title, game over, pause, shop, rotate), combo
+// chain, popups.
 
 import { drawText, CHAR_W } from './font.js';
 import { COL } from './sprites.js';
@@ -7,14 +7,17 @@ import { multiplier, comboValue } from './score.js';
 import { TRICK_NAMES } from './tricks.js';
 
 // --- HUD ---------------------------------------------------------------------
-// Score top-left, hi-score top-centre, pause button in the top-right corner
-// with the board icons just left of it. Strings are rebuilt only on change.
+// Score top-left with the run's coins under it, hi-score top-centre, pause
+// button in the top-right corner with the board icons just left of it.
+// Strings are rebuilt only on change.
 
 const pad = (n) => String(n).padStart(6, '0');
 let hudScore = -1;
 let hudText = '';
 let hudHi = -1;
 let hudHiText = '';
+let hudCoins = -1;
+let hudCoinText = '';
 
 // The pause button's touch area is much bigger than its icon (internal px
 // from the top-right corner), so it is easy to hit without looking.
@@ -35,7 +38,12 @@ export function drawHud(g, W, run, best, sprites) {
     hudHi = hi;
     hudHiText = 'HI ' + pad(hi);
   }
+  if (run.coins !== hudCoins) {
+    hudCoins = run.coins;
+    hudCoinText = '¤' + run.coins;
+  }
   drawText(g, hudText, 4, 4, COL.cream, { shadow: COL.ink });
+  drawText(g, hudCoinText, 4, 14, COL.gold, { shadow: COL.ink });
   drawText(g, hudHiText, W >> 1, 4, COL.steel, { align: 'center', shadow: COL.ink });
   const icon = sprites.pauseIcon;
   g.drawImage(icon, W - icon.width - 3, 3);
@@ -140,16 +148,18 @@ function ditherBox(g, x, y, w, h) {
   g.fillRect(x, y + h - 1, w, 1);
 }
 
-// Big-pixel button with a label; returns nothing (hit-test with buttonAt).
-function drawButton(g, b, label, active) {
+// Big-pixel button with a label (hit-test with inRect). active = held down,
+// disabled = greyed out.
+function drawButton(g, b, label, active, disabled) {
   g.fillStyle = active ? COL.indigo : COL.ink;
   g.fillRect(b.x, b.y, b.w, b.h);
-  g.fillStyle = active ? COL.gold : COL.steel;
+  g.fillStyle = active ? COL.gold : disabled ? COL.slate : COL.steel;
   g.fillRect(b.x, b.y, b.w, 1);
   g.fillRect(b.x, b.y + b.h - 1, b.w, 1);
   g.fillRect(b.x, b.y, 1, b.h);
   g.fillRect(b.x + b.w - 1, b.y, 1, b.h);
-  drawText(g, label, b.x + (b.w >> 1), b.y + ((b.h - 8) >> 1) + 1, active ? COL.gold : COL.cream, { align: 'center' });
+  const col = active ? COL.gold : disabled ? COL.slate : COL.cream;
+  drawText(g, label, b.x + (b.w >> 1), b.y + ((b.h - 8) >> 1) + 1, col, { align: 'center' });
 }
 
 function inRect(b, x, y) {
@@ -187,13 +197,15 @@ export function drawBootScreen(g, W, H, t, cfg) {
 
 // --- Title / attract ---------------------------------------------------------------
 // Logo, flashing TAP TO START, and a panel cycling through how-to-play, the
-// high-score table and stats, over the bot's demo run.
+// high-score table and stats, over the bot's demo run. The wallet sits in the
+// top-right corner and the SHOP button under the panel.
 
 export const TITLE_PANELS = 3;
 
-export function drawTitleScreen(g, W, H, t, panel, data, cfg) {
+export function drawTitleScreen(g, W, H, t, panel, data, pressed, cfg) {
   const cx = W >> 1;
   drawText(g, 'PIXEL GRIND', cx, 10, COL.gold, { align: 'center', scale: 2, shadow: COL.ink });
+  drawText(g, '¤' + data.wallet, W - 4, 4, COL.gold, { align: 'right', shadow: COL.ink });
   if (blinkOn(t, cfg)) drawText(g, data.touch ? 'TAP TO START' : 'SPACE OR CLICK TO START', cx, 32, COL.cream, center);
 
   const bx = cx - 124;
@@ -229,16 +241,20 @@ export function drawTitleScreen(g, W, H, t, panel, data, cfg) {
     line('DISTANCE ' + (st.distance / 10000).toFixed(1) + ' KM');
     line('BEST COMBO ' + st.bestCombo);
     line('TRICKS LANDED ' + st.tricks);
+    line('COINS COLLECTED ' + st.coins);
   }
 
-  if (data.installable) drawButton(g, INSTALL_BUTTON(W), 'INSTALL', false);
+  drawButton(g, SHOP_BUTTON(W), 'SHOP', pressed === 'shop');
+  if (data.installable) drawButton(g, INSTALL_BUTTON(W), 'INSTALL', pressed === 'install');
   drawText(g, 'BUILD ' + data.build, W - 4, H - 10, COL.steel, { align: 'right' });
 }
 
+const SHOP_BUTTON = (W) => ({ x: (W >> 1) - 36, y: 161, w: 72, h: 17 });
 // Shown on the title screen when the browser offers installing the app (M8).
 const INSTALL_BUTTON = (W) => ({ x: 4, y: 162, w: 64, h: 14 });
 
 export function titleButtonAt(x, y, W, installable) {
+  if (inRect(SHOP_BUTTON(W), x, y)) return 'shop';
   return installable && inRect(INSTALL_BUTTON(W), x, y) ? 'install' : null;
 }
 
@@ -293,33 +309,124 @@ const BAIL_REASON = {
 };
 
 const GAMEOVER_BUTTONS = (W) => ({
-  share: { x: (W >> 1) - 74, y: 128, w: 68, h: 16 },
-  title: { x: (W >> 1) + 6, y: 128, w: 68, h: 16 },
+  share: { x: (W >> 1) - 103, y: 128, w: 64, h: 16 },
+  shop: { x: (W >> 1) - 32, y: 128, w: 64, h: 16 },
+  title: { x: (W >> 1) + 39, y: 128, w: 64, h: 16 },
 });
 
 export function gameOverButtonAt(x, y, W) {
   const b = GAMEOVER_BUTTONS(W);
-  if (inRect(b.share, x, y)) return 'share';
-  if (inRect(b.title, x, y)) return 'title';
+  for (const name of ['share', 'shop', 'title']) if (inRect(b[name], x, y)) return name;
   return null;
 }
 
-// result: { score, bestCombo, distance (px), reason, rank (-1 = not in top 10) }
+// result: { score, bestCombo, distance (px), coins, wallet, reason, rank
+// (-1 = not in top 10), msg }
 export function drawGameOverScreen(g, W, H, t, result, canRetry, touch, pressed, sprites, cfg) {
   const cx = W >> 1;
   g.drawImage(sprites.checker, 0, 0);
   drawText(g, 'GAME OVER', cx, 14, COL.rose, { align: 'center', scale: 2, shadow: COL.ink });
-  drawText(g, BAIL_REASON[result.reason] || '', cx, 36, COL.steel, center);
-  drawText(g, 'SCORE ' + result.score, cx, 54, COL.cream, center);
-  drawText(g, 'BEST COMBO ' + result.bestCombo, cx, 66, COL.cream, center);
-  drawText(g, 'DISTANCE ' + Math.floor(result.distance / 10) + 'M', cx, 78, COL.cream, center);
-  if (result.rank === 0) drawText(g, 'NEW HIGH SCORE!', cx, 96, COL.gold, center);
-  else if (result.rank > 0) drawText(g, 'RANK ' + (result.rank + 1) + ' OF 10', cx, 96, COL.gold, center);
-  if (result.msg) drawText(result.msg, cx, 112, COL.mint, center);
+  drawText(g, BAIL_REASON[result.reason] || '', cx, 34, COL.steel, center);
+  drawText(g, 'SCORE ' + result.score, cx, 48, COL.cream, center);
+  drawText(g, 'BEST COMBO ' + result.bestCombo, cx, 59, COL.cream, center);
+  drawText(g, 'DISTANCE ' + Math.floor(result.distance / 10) + 'M', cx, 70, COL.cream, center);
+  drawText(g, `COINS +${result.coins}   WALLET ¤${result.wallet}`, cx, 81, COL.gold, center);
+  if (result.rank === 0) drawText(g, 'NEW HIGH SCORE!', cx, 98, COL.gold, center);
+  else if (result.rank > 0) drawText(g, 'RANK ' + (result.rank + 1) + ' OF 10', cx, 98, COL.gold, center);
+  if (result.msg) drawText(g, result.msg, cx, 112, COL.mint, center);
   const b = GAMEOVER_BUTTONS(W);
   drawButton(g, b.share, 'SHARE', pressed === 'share');
+  drawButton(g, b.shop, 'SHOP', pressed === 'shop');
   drawButton(g, b.title, 'TITLE', pressed === 'title');
   if (canRetry && blinkOn(t, cfg)) drawText(g, touch ? 'TAP TO RETRY' : 'SPACE TO RETRY', cx, 156, COL.gold, center);
+}
+
+// --- Shop ------------------------------------------------------------------------
+// Left: the skater in the selected item, drawn at 2x (the only scaled drawing
+// in the game), with its name and BACK. Right: the wallet, a tab per gear
+// slot, the slot's items (each on a mini skater, with its price) and the
+// BUY / EQUIP button.
+
+const SHOP_W = 214; // right panel width
+
+function shopLayout(W) {
+  const x0 = W - SHOP_W - 4;
+  return {
+    x0,
+    tab: (i) => ({ x: x0 + i * 54, y: 22, w: 52, h: 16 }),
+    tile: (i) => ({ x: x0 + (i % 4) * 54, y: 42 + Math.floor(i / 4) * 44, w: 52, h: 40 }),
+    action: { x: x0, y: 133, w: SHOP_W, h: 20 },
+    back: { x: 4, y: 160, w: 60, h: 16 },
+  };
+}
+
+// 'tab:N', 'item:N', 'action', 'back' or null.
+export function shopHitAt(x, y, W, tabs, items) {
+  const L = shopLayout(W);
+  for (let i = 0; i < tabs; i++) if (inRect(L.tab(i), x, y)) return 'tab:' + i;
+  for (let i = 0; i < items; i++) if (inRect(L.tile(i), x, y)) return 'item:' + i;
+  if (inRect(L.action, x, y)) return 'action';
+  if (inRect(L.back, x, y)) return 'back';
+  return null;
+}
+
+// v: { tabs: [label], tab, items: [{ name, price, owned, worn, tile }], sel,
+// wallet, preview (skater frames), action: { label, disabled }, msg, pressed }
+export function drawShopScreen(g, W, H, t, v, sprites, cfg) {
+  const L = shopLayout(W);
+  const lx = L.x0 >> 1; // left panel centre
+  g.drawImage(sprites.checker, 0, 0);
+  drawText(g, 'SHOP', lx, 4, COL.gold, { align: 'center', scale: 2, shadow: COL.ink });
+  drawText(g, '¤' + v.wallet, W - 4, 8, COL.gold, { align: 'right', shadow: COL.ink });
+
+  // Preview stage: rides, then shows a kickflip (the board's underside).
+  g.fillStyle = COL.ink;
+  g.fillRect(6, 28, L.x0 - 12, 122);
+  g.fillStyle = COL.slate;
+  g.fillRect(6, 28, L.x0 - 12, 1);
+  g.fillRect(6, 149, L.x0 - 12, 1);
+  const groundY = 112;
+  g.fillRect(lx - 28, groundY, 56, 2);
+  const s = cfg.shop;
+  const ct = t % (s.previewRide + s.previewFlip);
+  let img;
+  let hop = 0;
+  if (ct < s.previewRide) {
+    img = v.preview.ride[Math.floor(t / cfg.ui.rollFrameTime) & 1];
+  } else {
+    const f = (ct - s.previewRide) / s.previewFlip;
+    const frames = v.preview.flips.kickflip;
+    img = frames[Math.min(frames.length - 1, Math.floor(f * frames.length))];
+    hop = Math.round(Math.sin(f * Math.PI) * s.previewHop);
+  }
+  g.drawImage(img, lx - 16, groundY - 48 - hop * 2, 32, 48);
+  const it = v.items[v.sel];
+  drawText(g, it.name, lx, 122, COL.cream, center);
+  const status = it.worn ? 'EQUIPPED' : it.owned ? 'OWNED' : '¤' + it.price;
+  drawText(g, status, lx, 134, it.worn ? COL.mint : it.owned ? COL.cream : COL.gold, center);
+
+  for (let i = 0; i < v.tabs.length; i++) drawButton(g, L.tab(i), v.tabs[i], i === v.tab);
+
+  for (let i = 0; i < v.items.length; i++) {
+    const e = v.items[i];
+    const b = L.tile(i);
+    const sel = i === v.sel;
+    g.fillStyle = sel ? COL.indigo : COL.ink;
+    g.fillRect(b.x, b.y, b.w, b.h);
+    g.fillStyle = sel ? COL.gold : COL.slate;
+    g.fillRect(b.x, b.y, b.w, 1);
+    g.fillRect(b.x, b.y + b.h - 1, b.w, 1);
+    g.fillRect(b.x, b.y, 1, b.h);
+    g.fillRect(b.x + b.w - 1, b.y, 1, b.h);
+    g.drawImage(e.tile, b.x + 18, b.y + 3);
+    const label = e.worn ? 'ON' : e.owned ? 'OWNED' : '¤' + e.price;
+    const col = e.worn ? COL.mint : e.owned ? COL.cream : e.price <= v.wallet ? COL.gold : COL.steel;
+    drawText(g, label, b.x + (b.w >> 1), b.y + 30, col, { align: 'center' });
+  }
+
+  drawButton(g, L.action, v.action.label, v.pressed === 'action', v.action.disabled);
+  drawButton(g, L.back, 'BACK', v.pressed === 'back');
+  if (v.msg) drawText(g, v.msg.text, L.x0 + (SHOP_W >> 1), 160, v.msg.color, center);
 }
 
 // --- Trick popups ------------------------------------------------------------

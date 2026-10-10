@@ -1,8 +1,9 @@
 // Palette, sprites and background layers. Everything is pre-rendered once into
-// small canvases; nothing is scaled or rotated at draw time.
-// M1 sprites are placeholders built from rectangles (final art comes in M7).
+// small canvases; nothing is scaled or rotated at draw time (except the
+// shop's 2x preview of the skater).
 
 import { createRng } from './rng.js';
+import { lookFor, DEFAULT_GEAR } from './gear.js';
 
 // The one 16-colour palette (city at sunset). Final pick in M7.
 export const PALETTE = [
@@ -50,10 +51,29 @@ function makeCanvas(w, h) {
   return c;
 }
 
-function fillRects(g, rects) {
+// A rect's colour is a palette colour, or a role name ('shirt', 'deck'...)
+// looked up in `look`, which can give a colour or a two-colour pattern.
+function fillRects(g, rects, look) {
   for (const [col, x, y, w, h] of rects) {
-    g.fillStyle = col;
-    g.fillRect(x, y, w, h);
+    const c = look && col in look ? look[col] : col;
+    if (typeof c === 'string') {
+      g.fillStyle = c;
+      g.fillRect(x, y, w, h);
+    } else {
+      fillPattern(g, c, x, y, w, h);
+    }
+  }
+}
+
+// Two-colour pattern ({ a, b, kind: 'rows' | 'cols' | 'check' }), fixed to the
+// sprite's pixel grid so neighbouring rects line up.
+function fillPattern(g, p, x, y, w, h) {
+  for (let yy = y; yy < y + h; yy++) {
+    for (let xx = x; xx < x + w; xx++) {
+      const odd = p.kind === 'rows' ? yy & 1 : p.kind === 'cols' ? xx & 1 : (xx + yy) & 1;
+      g.fillStyle = odd ? p.b : p.a;
+      g.fillRect(xx, yy, 1, 1);
+    }
   }
 }
 
@@ -71,70 +91,88 @@ function addOutline(g, w, h, color) {
   }
 }
 
-function sprite(w, h, body, extra) {
+function sprite(w, h, body, extra, look) {
   const c = makeCanvas(w, h);
   const g = c.getContext('2d');
-  fillRects(g, body);
+  fillRects(g, body, look);
   addOutline(g, w, h, COL.ink);
-  if (extra) fillRects(g, extra);
+  if (extra) fillRects(g, extra, look);
   return c;
 }
 
 // --- Skater (16 x 24, facing right, feet on the bottom row) -----------------
+// Gear colours are roles in the rect lists: 'hat', 'hatB', 'shirt', 'pants',
+// 'deck' (board underside) and 'wheel'. They are filled from the worn gear
+// (gear.js) when the sprites are built, so changing gear rebuilds them.
 
-const HEAD = [
-  [COL.teal, 6, 1, 4, 2], // cap
-  [COL.teal, 10, 2, 2, 1], // brim
+const HEAD_BASE = [
   [COL.skin, 6, 3, 4, 4], // head
   [COL.brown, 6, 3, 1, 2], // hair
   [COL.ink, 9, 4, 1, 1], // eye
   [COL.skin, 7, 7, 2, 1], // neck
 ];
 
+// Hat designs, drawn over the head. 'hair' is no hat ('hat' = hair colour).
+const HATS = {
+  cap: [['hat', 6, 1, 4, 2], ['hat', 10, 2, 2, 1]],
+  backcap: [['hat', 6, 1, 4, 2], ['hat', 4, 2, 2, 1]],
+  hair: [['hat', 7, 1, 2, 1], ['hat', 6, 2, 4, 1]],
+  beanie: [['hatB', 7, 0, 2, 1], ['hat', 6, 1, 4, 1], ['hatB', 6, 2, 4, 1]],
+  helmet: [['hat', 6, 0, 4, 1], ['hat', 5, 1, 6, 2], ['hat', 5, 3, 1, 2], ['hatB', 5, 2, 6, 1]],
+  phones: [
+    [COL.brown, 7, 1, 2, 1], // hair
+    [COL.brown, 6, 2, 4, 1],
+    ['hatB', 6, 0, 4, 1], // band
+    ['hatB', 6, 1, 1, 2],
+    ['hat', 6, 3, 2, 3], // ear cup
+  ],
+  crown: [['hat', 5, 0, 1, 1], ['hat', 7, 0, 1, 1], ['hat', 9, 0, 1, 1], ['hat', 5, 1, 5, 2], ['hatB', 7, 1, 1, 1]],
+};
+
 const TORSO = [
-  [COL.rose, 5, 8, 6, 6], // shirt
-  [COL.indigo, 5, 14, 6, 2], // hips
+  ['shirt', 5, 8, 6, 6],
+  ['pants', 5, 14, 6, 2], // hips
 ];
 
 const ARMS_DOWN = [
-  [COL.rose, 4, 8, 1, 2],
+  ['shirt', 4, 8, 1, 2],
   [COL.skin, 3, 10, 1, 2],
-  [COL.rose, 11, 8, 1, 2],
+  ['shirt', 11, 8, 1, 2],
   [COL.skin, 12, 10, 1, 2],
 ];
 
 const ARMS_UP = [
-  [COL.rose, 4, 8, 1, 1],
+  ['shirt', 4, 8, 1, 1],
   [COL.skin, 3, 6, 1, 2],
-  [COL.rose, 11, 8, 1, 1],
+  ['shirt', 11, 8, 1, 1],
   [COL.skin, 12, 6, 1, 2],
 ];
 
 const LEGS = [
-  [COL.indigo, 5, 16, 2, 2], // back leg
-  [COL.indigo, 4, 18, 2, 2],
-  [COL.indigo, 9, 16, 2, 2], // front leg
-  [COL.indigo, 10, 18, 2, 2],
+  ['pants', 5, 16, 2, 2], // back leg
+  ['pants', 4, 18, 2, 2],
+  ['pants', 9, 16, 2, 2], // front leg
+  ['pants', 10, 18, 2, 2],
   [COL.white, 3, 20, 3, 1], // shoes
   [COL.white, 10, 20, 3, 1],
 ];
 
 // Knees pulled up while the board flips underneath.
 const TUCK_LEGS = [
-  [COL.indigo, 4, 15, 3, 2],
-  [COL.indigo, 9, 15, 3, 2],
+  ['pants', 4, 15, 3, 2],
+  ['pants', 9, 15, 3, 2],
   [COL.white, 3, 17, 3, 1],
   [COL.white, 10, 17, 3, 1],
 ];
 
 // Board frames, rows 20-23 of the 16 x 24 skater sprite. Dark grip on top,
 // bright underside, so flips read at this size.
-function boardFlat(wheelA = COL.cream, wheelB = COL.cream) {
+function boardFlat(wheelA = 'wheel', wheelB = 'wheel') {
   return [
     [COL.ink, 0, 20, 1, 1], // tail kick
     [COL.ink, 15, 20, 1, 1], // nose kick
     [COL.ink, 1, 21, 14, 1], // grip
-    [COL.gold, 1, 22, 14, 1], // underside
+    ['deck', 1, 22, 14, 1], // underside
     [wheelA, 3, 23, 1, 1],
     [wheelB, 4, 23, 1, 1],
     [wheelA, 11, 23, 1, 1],
@@ -145,16 +183,16 @@ function boardFlat(wheelA = COL.cream, wheelB = COL.cream) {
 const BOARD = {
   flat: boardFlat(),
   upsideDown: [
-    [COL.cream, 3, 20, 2, 1],
-    [COL.cream, 11, 20, 2, 1],
-    [COL.gold, 1, 21, 14, 1],
+    ['wheel', 3, 20, 2, 1],
+    ['wheel', 11, 20, 2, 1],
+    ['deck', 1, 21, 14, 1],
     [COL.ink, 1, 22, 14, 1],
     [COL.ink, 0, 23, 1, 1],
     [COL.ink, 15, 23, 1, 1],
   ],
   // On its edge, showing the underside / the grip (barrel roll).
   edgeUnder: [
-    [COL.gold, 1, 20, 14, 3],
+    ['deck', 1, 20, 14, 3],
     [COL.steel, 3, 21, 2, 1],
     [COL.steel, 11, 21, 2, 1],
   ],
@@ -167,24 +205,24 @@ const BOARD = {
     [COL.ink, 4, 20, 1, 1],
     [COL.ink, 11, 20, 1, 1],
     [COL.ink, 5, 21, 6, 1],
-    [COL.gold, 5, 22, 6, 1],
-    [COL.cream, 6, 23, 1, 1],
-    [COL.cream, 9, 23, 1, 1],
+    ['deck', 5, 22, 6, 1],
+    ['wheel', 6, 23, 1, 1],
+    ['wheel', 9, 23, 1, 1],
   ],
   end: [
     [COL.ink, 6, 21, 4, 1],
-    [COL.gold, 6, 22, 4, 1],
-    [COL.cream, 6, 23, 1, 1],
-    [COL.cream, 9, 23, 1, 1],
+    ['deck', 6, 22, 4, 1],
+    ['wheel', 6, 23, 1, 1],
+    ['wheel', 9, 23, 1, 1],
   ],
   endUpsideDown: [
-    [COL.cream, 6, 20, 1, 1],
-    [COL.cream, 9, 20, 1, 1],
-    [COL.gold, 6, 21, 4, 1],
+    ['wheel', 6, 20, 1, 1],
+    ['wheel', 9, 20, 1, 1],
+    ['deck', 6, 21, 4, 1],
     [COL.ink, 6, 22, 4, 1],
   ],
   halfEdgeUnder: [
-    [COL.gold, 5, 20, 6, 3],
+    ['deck', 5, 20, 6, 3],
     [COL.steel, 6, 21, 1, 1],
     [COL.steel, 9, 21, 1, 1],
   ],
@@ -201,11 +239,11 @@ const shift = (rects, dx, dy) => rects.map(([c, x, y, w, h]) => [c, x + dx, y + 
 const BOARD_POP = [
   [COL.ink, 0, 22, 1, 1],
   [COL.ink, 1, 22, 5, 1],
-  [COL.gold, 1, 23, 5, 1],
+  ['deck', 1, 23, 5, 1],
   [COL.ink, 6, 21, 5, 1],
-  [COL.gold, 6, 22, 5, 1],
+  ['deck', 6, 22, 5, 1],
   [COL.ink, 11, 20, 4, 1],
-  [COL.gold, 11, 21, 4, 1],
+  ['deck', 11, 21, 4, 1],
   [COL.ink, 15, 19, 1, 1],
 ];
 
@@ -225,98 +263,121 @@ const FLIP_FRAMES = {
   treflip: ['half', 'halfEdgeUnder', 'endUpsideDown', 'halfEdgeGrip', 'half', 'flat'],
 };
 
-function buildSkater() {
-  const body = [...HEAD, ...TORSO, ...ARMS_DOWN, ...LEGS];
-  const tuck = [...HEAD, ...TORSO, ...ARMS_UP, ...TUCK_LEGS];
+// Gear colour names (gear.js lookFor) -> palette colours and patterns.
+function resolveLook(names) {
+  const col = (v) => (typeof v === 'string' ? COL[v] : { kind: v.kind, a: COL[v.a], b: COL[v.b] });
+  const look = { hatDesign: HATS[names.hatDesign] ? names.hatDesign : 'cap' };
+  for (const role of ['hat', 'hatB', 'shirt', 'pants', 'deck', 'wheel']) look[role] = col(names[role]);
+  return look;
+}
+
+// Every skater frame, in the given gear (gear.js lookFor).
+export function buildSkater(names) {
+  const look = resolveLook(names);
+  const spr = (w, h, body, extra) => sprite(w, h, body, extra, look);
+  const head = [...HEAD_BASE, ...HATS[look.hatDesign]];
+  const body = [...head, ...TORSO, ...ARMS_DOWN, ...LEGS];
+  const tuck = [...head, ...TORSO, ...ARMS_UP, ...TUCK_LEGS];
   const flips = {};
   for (const trick of Object.keys(FLIP_FRAMES)) {
-    flips[trick] = FLIP_FRAMES[trick].map((f) => sprite(16, 24, tuck, BOARD[f]));
+    flips[trick] = FLIP_FRAMES[trick].map((f) => spr(16, 24, tuck, BOARD[f]));
   }
   return {
-    ride: [
-      sprite(16, 24, body, boardFlat(COL.cream, COL.steel)),
-      sprite(16, 24, body, boardFlat(COL.steel, COL.cream)),
-    ],
-    // Trucks on the rail with sparks (particles come in M7).
+    ride: [spr(16, 24, body, boardFlat('wheel', COL.steel)), spr(16, 24, body, boardFlat(COL.steel, 'wheel'))],
+    // Trucks on the rail with sparks.
     grind: [
-      sprite(16, 24, body, [...BOARD.flat.slice(0, 4), [COL.gold, 3, 23, 1, 1], [COL.white, 12, 23, 1, 1]]),
-      sprite(16, 24, body, [...BOARD.flat.slice(0, 4), [COL.white, 4, 23, 1, 1], [COL.gold, 11, 23, 1, 1]]),
+      spr(16, 24, body, [...BOARD.flat.slice(0, 4), [COL.gold, 3, 23, 1, 1], [COL.white, 12, 23, 1, 1]]),
+      spr(16, 24, body, [...BOARD.flat.slice(0, 4), [COL.white, 4, 23, 1, 1], [COL.gold, 11, 23, 1, 1]]),
     ],
-    air: sprite(16, 24, [...HEAD, ...TORSO, ...ARMS_UP, ...LEGS], BOARD.flat),
+    air: spr(16, 24, [...head, ...TORSO, ...ARMS_UP, ...LEGS], BOARD.flat),
     flips,
     // Kick-push: leaning in, back foot to the ground and back.
     push: PUSH_STEPS.map(([legX, footX, footY]) =>
-      sprite(16, 24, [...shift([...HEAD, ...TORSO, ...ARMS_DOWN], 1, 0), ...LEGS.slice(2, 4), LEGS[5]], [
+      spr(16, 24, [...shift([...head, ...TORSO, ...ARMS_DOWN], 1, 0), ...LEGS.slice(2, 4), LEGS[5]], [
         ...BOARD.flat,
-        [COL.indigo, legX, 16, 2, footY - 16],
+        ['pants', legX, 16, 2, footY - 16],
         [COL.white, footX, footY, 3, 1],
       ]),
     ),
     // Ollie snap: tail down, nose up, front knee up.
-    pop: sprite(
+    pop: spr(
       16,
       24,
-      [...shift([...HEAD, ...TORSO, ...ARMS_UP], 0, -1), [COL.indigo, 5, 15, 2, 4], [COL.indigo, 9, 15, 3, 2], [COL.white, 3, 19, 3, 1], [COL.white, 10, 17, 3, 1]],
+      [...shift([...head, ...TORSO, ...ARMS_UP], 0, -1), ['pants', 5, 15, 2, 4], ['pants', 9, 15, 3, 2], [COL.white, 3, 19, 3, 1], [COL.white, 10, 17, 3, 1]],
       BOARD_POP,
     ),
     // Landing squash: knees bent, body 2 px lower.
-    squash: sprite(
+    squash: spr(
       16,
       24,
-      [...shift([...HEAD, ...TORSO, ...ARMS_DOWN], 0, 2), [COL.indigo, 4, 18, 3, 2], [COL.indigo, 9, 18, 3, 2], [COL.white, 3, 20, 3, 1], [COL.white, 10, 20, 3, 1]],
+      [...shift([...head, ...TORSO, ...ARMS_DOWN], 0, 2), ['pants', 4, 18, 3, 2], ['pants', 9, 18, 3, 2], [COL.white, 3, 20, 3, 1], [COL.white, 10, 20, 3, 1]],
       BOARD.flat,
     ),
     // Getting back up after a bail: crouched, then squash, then riding.
-    getUp: sprite(
+    getUp: spr(
       16,
       24,
-      [...shift([...HEAD, ...TORSO, ...ARMS_DOWN], 1, 5), [COL.indigo, 4, 20, 8, 1], [COL.white, 3, 20, 2, 1], [COL.white, 11, 20, 2, 1]],
+      [...shift([...head, ...TORSO, ...ARMS_DOWN], 1, 5), ['pants', 4, 20, 8, 1], [COL.white, 3, 20, 2, 1], [COL.white, 11, 20, 2, 1]],
       BOARD.flat,
     ),
-    // Tumbling: thrown back, then flat in the air (24 x 16, bottom on the ground).
+    // Tumbling: thrown back, then flat in the air (24 x 16, bottom on the
+    // ground). Any hat is drawn as a block of its main colour.
     tumble: [
-      sprite(24, 16, [
-        [COL.teal, 3, 3, 2, 4], // cap
+      spr(24, 16, [
+        ['hat', 3, 3, 2, 4],
         [COL.skin, 5, 3, 4, 4], // head
-        [COL.rose, 8, 5, 6, 5], // shirt
+        ['shirt', 8, 5, 6, 5],
         [COL.skin, 6, 9, 2, 3], // arm flung down
-        [COL.indigo, 13, 4, 4, 4], // legs up
-        [COL.indigo, 16, 1, 3, 4],
+        ['pants', 13, 4, 4, 4], // legs up
+        ['pants', 16, 1, 3, 4],
         [COL.white, 18, 0, 3, 2], // shoes
       ]),
-      sprite(24, 16, [
+      spr(24, 16, [
         [COL.white, 1, 7, 1, 3],
-        [COL.indigo, 2, 7, 6, 3],
-        [COL.rose, 8, 6, 7, 4],
+        ['pants', 2, 7, 6, 3],
+        ['shirt', 8, 6, 7, 4],
         [COL.skin, 10, 3, 3, 3], // arm up
         [COL.skin, 15, 6, 4, 4],
-        [COL.teal, 19, 6, 2, 4],
+        ['hat', 19, 6, 2, 4],
       ]),
     ],
     // Lying on the ground after a bail (24 x 10, bottom row on the ground).
-    bail: sprite(24, 10, [
+    bail: spr(24, 10, [
       [COL.white, 1, 5, 1, 3], // shoes
-      [COL.indigo, 2, 5, 6, 3], // legs
-      [COL.rose, 8, 4, 7, 4], // shirt
+      ['pants', 2, 5, 6, 3], // legs
+      ['shirt', 8, 4, 7, 4],
       [COL.skin, 10, 8, 4, 1], // arm
       [COL.skin, 15, 4, 4, 4], // head
-      [COL.teal, 19, 4, 2, 4], // cap
+      ['hat', 19, 4, 2, 4],
       [COL.ink, 17, 5, 1, 1], // eye
     ]),
     // Upside-down board skidding away (16 x 4).
     boardFlipped: (() => {
       const c = makeCanvas(16, 4);
-      fillRects(c.getContext('2d'), [
-        [COL.cream, 3, 0, 2, 1],
-        [COL.cream, 11, 0, 2, 1],
-        [COL.gold, 1, 1, 14, 1],
-        [COL.ink, 1, 2, 14, 1],
-        [COL.ink, 0, 3, 1, 1],
-        [COL.ink, 15, 3, 1, 1],
-      ]);
+      fillRects(
+        c.getContext('2d'),
+        [
+          ['wheel', 3, 0, 2, 1],
+          ['wheel', 11, 0, 2, 1],
+          ['deck', 1, 1, 14, 1],
+          [COL.ink, 1, 2, 14, 1],
+          [COL.ink, 0, 3, 1, 1],
+          [COL.ink, 15, 3, 1, 1],
+        ],
+        look,
+      );
       return c;
     })(),
   };
+}
+
+// One frame for a shop tile: riding, or (for boards) mid-kickflip with the
+// board's underside showing.
+export function buildSkaterTile(names, showBoard) {
+  const look = resolveLook(names);
+  const head = [...HEAD_BASE, ...HATS[look.hatDesign]];
+  if (showBoard) return sprite(16, 24, [...head, ...TORSO, ...ARMS_UP, ...TUCK_LEGS], BOARD.edgeUnder, look);
+  return sprite(16, 24, [...head, ...TORSO, ...ARMS_DOWN, ...LEGS], BOARD.flat, look);
 }
 
 // --- Obstacles (city skins) ------------------------------------------------
@@ -663,8 +724,8 @@ function fromRows(rows, colours) {
   return c;
 }
 
-// Spinning token: 4 frames (face, turning, edge, turning back).
-function buildToken() {
+// Spinning coin: 4 frames (face, turning, edge, turning back).
+function buildCoin() {
   const colours = { o: COL.orange, g: COL.gold, c: COL.cream };
   const face = ['..oooo..', '.oggggo.', 'oggcgggo', 'oggcgggo', 'oggcgggo', 'oggcgggo', '.oggggo.', '..oooo..'];
   const turnA = ['...oo...', '..oggo..', '.ogcggo.', '.ogcggo.', '.ogcggo.', '.ogcggo.', '..oggo..', '...oo...'];
@@ -699,7 +760,9 @@ function buildChecker(w, h) {
   return c;
 }
 
-export function buildSprites(cfg) {
+// gear: worn gear ({ slot: item id }, see gear.js); the skater is rebuilt with
+// buildSkater when it changes.
+export function buildSprites(cfg, gear = DEFAULT_GEAR) {
   const groundY = cfg.world.groundY;
   const fixed = {
     lowBlock: buildCone(),
@@ -721,9 +784,9 @@ export function buildSprites(cfg) {
     return c;
   }
   return {
-    skater: buildSkater(),
+    skater: buildSkater(lookFor(gear)),
     obstacle,
-    token: buildToken(),
+    coin: buildCoin(),
     boardIcon: buildBoardIcon(),
     pauseIcon: buildPauseIcon(),
     // Per day phase (see PHASES): index with phaseAt().

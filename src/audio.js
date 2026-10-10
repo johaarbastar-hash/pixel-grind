@@ -128,7 +128,7 @@ export const SOUNDS = {
     v.noise(t, 0.06, 0.14, 'bandpass', 2600, 2600, 5);
   },
   // Classic coin: two rising notes.
-  token(v, t) {
+  coin(v, t) {
     v.tone('square', midiHz(83), midiHz(83), t, 0.06, 0.12);
     v.tone('square', midiHz(88), midiHz(88), t + 0.06, 0.14, 0.12);
   },
@@ -143,8 +143,8 @@ export const SOUNDS = {
     v.noise(t, 0.45, 0.35, 'lowpass', 2400, 250);
     v.tone('sawtooth', 440, 90, t, 0.4, 0.08);
   },
-  // Short 1-up jingle.
-  extraBoard(v, t) {
+  // Short jingle for buying gear in the shop.
+  buy(v, t) {
     v.notes('square', [72, 76, 79, 84, 88, 91], t, 0.06, 0.07, 0.11);
   },
   blip(v, t) {
