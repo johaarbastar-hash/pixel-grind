@@ -35,6 +35,7 @@ import {
   drawPopups,
   drawBanner,
   hypeTier,
+  fmt,
   drawShopScreen,
   shopHitAt,
 } from './ui.js';
@@ -64,6 +65,7 @@ import { createBot } from './bot.js';
 import { getSetting, setSetting, getScores, scoreRank, addScore, getStats, recordRun } from './storage.js';
 import { createShop } from './shop.js';
 import { SLOTS, SLOT_NAMES, itemsIn, lookFor } from './gear.js';
+import { parseChallenge, challengeQuery, CHALLENGE_PARAMS } from './modes.js';
 
 /* global __BUILD_ID__ */
 const BUILD = typeof __BUILD_ID__ !== 'undefined' ? __BUILD_ID__ : 'DEV';
@@ -75,7 +77,9 @@ const REFRESH_INTERVALS = [1 / 30, 1 / 60, 1 / 90, 1 / 120, 1 / 144];
 // (fixed tier / speed, repeat one segment, skip the opening).
 const params = new URLSearchParams(location.search);
 const intParam = (name) => (params.has(name) ? Number.parseInt(params.get(name), 10) || 0 : 0);
-const urlSeed = params.has('seed') ? Number.parseInt(params.get('seed'), 10) >>> 0 : null;
+// A challenge link (seed + beat) is handled by game.challenge instead.
+const challengeLink = parseChallenge(params, CONFIG);
+let urlSeed = params.has('seed') && !challengeLink ? Number.parseInt(params.get('seed'), 10) >>> 0 : null;
 const urlSpeed = intParam('speed');
 const urlSeg = params.get('seg');
 const replay = !!(params.has('tier') || urlSpeed || urlSeg);
@@ -133,6 +137,9 @@ const game = {
   newBest: false, // this run has passed the #1 score (game.best)
   bannerTime: 0, // s the NEW BEST! banner has left
   hitStop: 0, // ticks the world stays frozen after a hype-tier combo
+  challenge: challengeLink, // { seed, beat, by } while in challenge mode
+  beaten: false, // this run has passed the challenge score
+  beatenTime: 0, // s BEATEN! stays on the HUD
   zoomTime: 0, // s of zoom punch left
   crt: null, // overlay currently shown
 };
@@ -152,6 +159,7 @@ function refreshScores() {
     scores: getScores(),
     stats: getStats(),
     wallet: shop.wallet,
+    challenge: game.challenge,
     installable: !!game.installPrompt,
   };
 }
@@ -214,15 +222,21 @@ function updateDemo(dt) {
 
 // --- Runs ------------------------------------------------------------------------
 
+// Challenge runs never have the tutorial: it would change the course.
 function startRun(forceTutorial = false) {
-  const tutorial = forceTutorial || params.get('tutorial') === '1' || (!replay && !getSetting('tutorialDone', false));
-  const run = createRun(CONFIG, urlSeed ?? randomSeed(), { spawn: true, script: tutorial ? TUTORIAL : null });
+  const c = game.challenge;
+  const tutorial =
+    !c && (forceTutorial || params.get('tutorial') === '1' || (!replay && !getSetting('tutorialDone', false)));
+  const seed = c ? c.seed : (urlSeed ?? randomSeed());
+  const run = createRun(CONFIG, seed, { spawn: true, script: tutorial ? TUTORIAL : null });
   if (replay) run.world.nextSpawnX = CONFIG.view.maxWidth + 40; // straight to the action, like the soak test
   if (urlSpeed) run.world.speedOverride = urlSpeed;
   setRun(run);
   game.tutorial = tutorial ? { snap: cloneRun(run, CONFIG), cp: 0, retry: 0 } : null;
   game.newBest = false;
   game.bannerTime = 0;
+  game.beaten = false;
+  game.beatenTime = 0;
   refreshScores();
   setState('play');
   playSfx('select');
@@ -244,6 +258,7 @@ function gameOver() {
     coins: run.coins,
     wallet: shop.wallet,
     best: game.best,
+    challenge: game.challenge,
     reason: run.bailReason,
     rank,
     msg: null,
@@ -275,6 +290,53 @@ function checkNewBest(dt) {
   game.newBest = true;
   game.bannerTime = CONFIG.best.bannerTime;
   playSfx('best');
+}
+
+// --- Challenge mode ----------------------------------------------------------------
+// From a link (?seed=S&beat=N&by=XYZ): every run uses that seed, the HUD
+// shows the score to beat, and game-over says who won. Leaving (TITLE on the
+// game-over screen) drops the link's params from the address bar.
+
+function leaveChallenge() {
+  if (!game.challenge) return;
+  game.challenge = null;
+  urlSeed = null;
+  try {
+    const url = new URL(location.href);
+    for (const k of CHALLENGE_PARAMS) url.searchParams.delete(k);
+    history.replaceState(null, '', url.pathname + url.search + url.hash);
+  } catch {
+    // no history API: the params stay in the address bar, that's all
+  }
+}
+
+function checkChallenge(dt) {
+  if (game.beatenTime > 0) game.beatenTime = Math.max(0, game.beatenTime - dt);
+  const c = game.challenge;
+  if (!c || game.beaten || game.run.score <= c.beat) return;
+  game.beaten = true;
+  game.beatenTime = CONFIG.challenge.beatenTime;
+}
+
+// HUD line under the hi-score: the score to beat, BEATEN!, then the margin.
+let beatLine = { text: '', color: COL.cream, key: '' };
+function hudBeat() {
+  const c = game.challenge;
+  if (!c) return null;
+  let text;
+  let color;
+  if (!game.beaten) {
+    text = 'BEAT ' + fmt(c.beat);
+    color = COL.cream;
+  } else if (game.beatenTime > 0) {
+    text = 'BEATEN!';
+    color = COL.gold;
+  } else {
+    text = '+' + fmt(game.run.score - c.beat);
+    color = COL.mint;
+  }
+  if (beatLine.key !== text) beatLine = { text, color, key: text };
+  return beatLine;
 }
 
 // --- Pause, countdown ----------------------------------------------------------------
@@ -330,7 +392,13 @@ const MENU = [
   { label: () => 'RESUME', run: () => resume() },
   { label: () => (isMuted() ? 'SOUND: OFF' : 'SOUND: ON'), run: () => toggleMute() },
   { label: () => (crtOn() ? 'CRT: ON' : 'CRT: OFF'), run: () => setSetting('crt', !crtOn()) },
-  { label: () => 'REPLAY TUTORIAL', run: () => startRun(true) },
+  {
+    label: () => 'REPLAY TUTORIAL',
+    run: () => {
+      leaveChallenge();
+      startRun(true);
+    },
+  },
   { label: () => 'QUIT', run: () => toTitle() },
 ];
 
@@ -397,10 +465,12 @@ function confirmLetter() {
   setState('gameover');
 }
 
+// Shares a challenge link: the same course (seed) with this score to beat.
 function share() {
   const r = game.result;
-  const text = `I scored ${r.score.toLocaleString('en-US')} in PIXEL GRIND`;
-  const url = location.origin + location.pathname;
+  const text = `I scored ${fmt(r.score)} in PIXEL GRIND. Beat me:`;
+  const by = getSetting('lastInitials', null) || 'YOU';
+  const url = location.origin + location.pathname + challengeQuery(game.run.seed, r.score, by);
   const fallback = () => {
     const copy =
       navigator.clipboard && navigator.clipboard.writeText
@@ -441,7 +511,10 @@ function handleGameOver(a) {
     playSfx('select');
     if (pressed === 'share') share();
     else if (pressed === 'shop') openShop();
-    else toTitle();
+    else {
+      leaveChallenge();
+      toTitle();
+    }
   }
 }
 
@@ -812,7 +885,10 @@ function handleAction(a) {
   if (a === 'pause') {
     if (game.state === 'play' || game.state === 'countdown') pause();
     else if (game.state === 'paused' && !game.portrait) resume();
-    else if (game.state === 'gameover') toTitle();
+    else if (game.state === 'gameover') {
+      leaveChallenge();
+      toTitle();
+    }
     else if (game.state === 'shop') closeShop();
     return;
   }
@@ -896,6 +972,7 @@ function tick(dt) {
       grindSparks(game.run);
       parts.update(dt);
       checkNewBest(dt);
+      checkChallenge(dt);
       if (game.tutorial) updateTutorial(dt);
       else if (game.run.over && game.run.downTime >= CONFIG.bail.gameOverDelay) gameOver();
       break;
@@ -931,7 +1008,7 @@ function render() {
     } else {
       // The end-of-run screens have the numbers themselves.
       if (game.state !== 'initials' && game.state !== 'gameover') {
-        drawHud(g, W, run, game.best, sprites, game.newBest);
+        drawHud(g, W, run, game.best, sprites, game.newBest, hudBeat());
         drawCombo(g, W, run.tricks, CONFIG);
         if (game.tutorial && !run.down) {
           const lines = tutorialPrompt(run.world.distance, game.touch);

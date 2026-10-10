@@ -201,6 +201,13 @@ export const CONFIG = {
     bannerTime: 1.2, // s the NEW BEST! banner stays up
   },
 
+  // Challenge links (?seed=S&beat=N&by=XYZ): play a friend's course and beat
+  // their score.
+  challenge: {
+    beatenTime: 1.5, // s the HUD shows BEATEN! before switching to the margin
+    maxBeat: 99999999, // larger beat= values in a link are ignored
+  },
+
   ui: {
     blinkPeriod: 0.5, // s per on/off phase of blinking prompts
     rollFrameTime: 0.12, // s per rolling animation frame

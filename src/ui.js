@@ -1,7 +1,7 @@
 // HUD and full-screen prompts (title, game over, pause, shop, rotate), combo
 // chain, popups.
 
-import { drawText, CHAR_W } from './font.js';
+import { drawText, textWidth, CHAR_W } from './font.js';
 import { COL } from './sprites.js';
 import { multiplier, comboValue } from './score.js';
 import { TRICK_NAMES } from './tricks.js';
@@ -29,8 +29,9 @@ export function hitPauseButton(x, y, W) {
 }
 
 // newBest: the run has passed the #1 score, so the hi-score shows the live
-// score in gold.
-export function drawHud(g, W, run, best, sprites, newBest) {
+// score in gold. beat: { text, color } for the line under the hi-score in a
+// challenge run ("BEAT 4,120", "BEATEN!", "+230"), or null.
+export function drawHud(g, W, run, best, sprites, newBest, beat) {
   if (run.score !== hudScore) {
     hudScore = run.score;
     hudText = pad(run.score);
@@ -47,6 +48,7 @@ export function drawHud(g, W, run, best, sprites, newBest) {
   drawText(g, hudText, 4, 4, COL.cream, { shadow: COL.ink });
   drawText(g, hudCoinText, 4, 14, COL.gold, { shadow: COL.ink });
   drawText(g, hudHiText, W >> 1, 4, newBest ? COL.gold : COL.steel, { align: 'center', shadow: COL.ink });
+  if (beat) drawText(g, beat.text, W >> 1, 14, beat.color, { align: 'center', shadow: COL.ink });
   const icon = sprites.pauseIcon;
   g.drawImage(icon, W - icon.width - 3, 3);
   const b = sprites.boardIcon;
@@ -250,15 +252,30 @@ export function drawBootScreen(g, W, H, t, cfg) {
 
 export const TITLE_PANELS = 3;
 
+// data.challenge: { beat, by } in challenge mode (two lines under the logo,
+// the panel box a little shorter), else null.
 export function drawTitleScreen(g, W, H, t, panel, data, pressed, cfg) {
   const cx = W >> 1;
-  drawText(g, 'PIXEL GRIND', cx, 10, COL.gold, { align: 'center', scale: 2, shadow: COL.ink });
-  drawText(g, '¤' + data.wallet, W - 4, 4, COL.gold, { align: 'right', shadow: COL.ink });
-  if (blinkOn(t, cfg)) drawText(g, data.touch ? 'TAP TO START' : 'SPACE OR CLICK TO START', cx, 32, COL.cream, center);
+  drawText(g, '¤' + data.wallet, W - 4, 2, COL.gold, { align: 'right', shadow: COL.ink });
+  drawText(g, 'PIXEL GRIND', cx, 11, COL.gold, { align: 'center', scale: 2, shadow: COL.ink });
+  const start = data.touch ? 'TAP TO START' : 'SPACE OR CLICK TO START';
+  let boxY = 46;
+  if (data.challenge) {
+    const c = data.challenge;
+    drawText(g, 'CHALLENGE FROM ' + c.by, cx, 30, COL.rose, center);
+    // "BEAT 4,120   TAP TO START", the second half blinking.
+    const beat = 'BEAT ' + fmt(c.beat) + '   ';
+    const left = cx - (textWidth(beat + start) >> 1);
+    drawText(g, beat, left, 39, COL.gold, { shadow: COL.ink });
+    if (blinkOn(t, cfg)) drawText(g, start, left + textWidth(beat) + 1, 39, COL.cream, { shadow: COL.ink });
+    boxY = 49;
+  } else if (blinkOn(t, cfg)) {
+    drawText(g, start, cx, 31, COL.cream, center);
+  }
 
   const bx = cx - 124;
-  ditherBox(g, bx, 46, 248, 112);
-  let y = 52;
+  ditherBox(g, bx, boxY, 248, 158 - boxY);
+  let y = boxY + 6;
   const line = (text, col = COL.cream) => {
     drawText(g, text, cx, y, col, center);
     y += 11;
@@ -370,9 +387,16 @@ export function gameOverButtonAt(x, y, W) {
 
 // Under the score, in this order; lines that don't apply are left out (up to
 // 7 fit). result: { score, bestCombo, distance (px), coins, wallet, best (the
-// #1 score before this run), reason, rank (-1 = not in top 10), msg }
+// #1 score before this run), challenge ({ beat, by } or null), reason, rank
+// (-1 = not in top 10), msg }
 function gameOverLines(r) {
   const lines = [];
+  const c = r.challenge;
+  if (c) {
+    if (r.score > c.beat) lines.push([`YOU BEAT ${c.by} BY ${fmt(r.score - c.beat)}`, COL.gold]);
+    else if (r.score === c.beat) lines.push([`TIED WITH ${c.by}`, COL.cream]);
+    else lines.push([`${c.by} WINS BY ${fmt(c.beat - r.score)}`, COL.rose]);
+  }
   if (r.score > r.best) lines.push(['NEW BEST BY ' + fmt(r.score - r.best), COL.gold]);
   else if (r.score === r.best) lines.push(['TIED YOUR BEST', COL.cream]);
   else lines.push([fmt(r.best - r.score) + ' SHORT OF YOUR BEST', COL.steel]);

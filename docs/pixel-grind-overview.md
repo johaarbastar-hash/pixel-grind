@@ -2,7 +2,7 @@
 
 *As of 10 October 2026. Play it on a phone, held sideways: https://johaarbastar-hash.github.io/pixel-grind/*
 
-> **If you're reading this to suggest ideas:** I'm looking for things to add that would make people want "one more run". Section 14 lists what's already planned. Section 15 lists the limits an idea has to fit, and section 16 has some questions to start from.
+> **If you're reading this to suggest ideas:** I'm looking for things to add that would make people want "one more run". Section 15 lists what's already planned. Section 16 lists the limits an idea has to fit, and section 17 has some questions to start from.
 
 ---
 
@@ -161,7 +161,20 @@ Board colours are the underside of the deck plus the wheels. You mostly see them
 
 ---
 
-## 7. First-run tutorial
+## 7. Playing against friends
+
+### Challenge links
+- SHARE on the game-over screen sends a challenge link: "I scored 4,120 in PIXEL GRIND. Beat me:" plus a link that carries the course (the run's seed), the score and your initials (or "YOU" if you've never entered any).
+- Opening the link starts challenge mode. The title shows "CHALLENGE FROM XYZ" and "BEAT 4,120", and starting plays that exact course. There's no tutorial in challenge mode, so it really is the same course.
+- During the run a line under the high score shows "BEAT 4,120". When you pass it, it flips to "BEATEN!" in gold for 1.5 s, then shows your margin ("+230").
+- Game over says "YOU BEAT XYZ BY 230" or "XYZ WINS BY 410". Retry replays the same course, and SHARE sends the same course back with your score and initials.
+- TITLE on the game-over screen leaves challenge mode and removes the challenge from the address bar.
+- Challenge runs still count for your local high-score table.
+- No server is involved: the link itself carries everything.
+
+---
+
+## 8. First-run tutorial
 
 The first run starts with a 30-second guided opening:
 1. "TAP TO OLLIE" over a cone
@@ -174,28 +187,28 @@ A crash during the tutorial rewinds you to the last checkpoint instead of costin
 
 ---
 
-## 8. Screens and menus
+## 9. Screens and menus
 
 - **Boot:** about 2 s of fake arcade boot text ("ROM CHECK … OK"), once per session. A tap skips it.
 - **Title:**
-  - Logo and a flashing "TAP TO START".
+  - Logo and a flashing "TAP TO START" (in challenge mode, "CHALLENGE FROM XYZ" and "BEAT 4,120" as well).
   - A computer player skates a demo run in the background.
   - A panel cycles every 5 s: how to play, the high-score table, and your stats (runs, total distance, best combo, tricks landed, coins collected).
   - Your wallet sits in the corner, with a SHOP button underneath. On Android there's also an INSTALL button.
 - **During a run (HUD):**
   - Top-left: score, with this run's coins under it.
-  - Top-centre: the high score (gold once you've passed it this run).
+  - Top-centre: the high score (gold once you've passed it this run), and in a challenge run the score to beat under it.
   - Top-right: a pause button, with one board icon per board left beside it.
 - **Pause menu:** RESUME, SOUND on/off, CRT on/off, REPLAY TUTORIAL, QUIT.
   - The game pauses itself if you switch apps or turn the phone upright.
   - Resuming counts down 3-2-1.
 - **New high score:** pick 3 initials (swipe up/down to change a letter, tap to confirm).
-- **Game over:** the cause, score, how it compares with your best ("NEW BEST BY 320" or "147 SHORT OF YOUR BEST"), best combo, distance, coins, and your rank if you made the top 10. Buttons: SHARE (sends "I scored … in PIXEL GRIND" and the link), SHOP, TITLE. Tap anywhere else to retry.
+- **Game over:** the cause, score, the challenge result in a challenge run, how it compares with your best ("NEW BEST BY 320" or "147 SHORT OF YOUR BEST"), best combo, distance, coins, and your rank if you made the top 10. Buttons: SHARE (sends a challenge link, see section 7), SHOP, TITLE. Tap anywhere else to retry.
 - **Rotate screen:** held upright, the phone shows an animated "ROTATE YOUR PHONE".
 
 ---
 
-## 9. Look
+## 10. Look
 
 - **Pixel art:** the game draws at 180 pixels tall and 320-400 wide (matching the phone's shape), then scales up by a whole number so pixels stay sharp.
 - **16 colours only:** ink (near-black), navy, indigo, purple, magenta, rose, orange, gold, cream, white, teal, mint, slate, steel, brown, skin.
@@ -216,7 +229,7 @@ A crash during the tutorial rewinds you to the last checkpoint instead of costin
 
 ---
 
-## 10. Sound and vibration
+## 11. Sound and vibration
 
 - **All synthesized in the browser; there are no audio files.**
 - **Sound effects:**
@@ -230,13 +243,13 @@ A crash during the tutorial rewinds you to the last checkpoint instead of costin
 
 ---
 
-## 11. What's saved on the phone
+## 12. What's saved on the phone
 
-The high-score table, stats, settings (sound, CRT, tutorial done, last initials), coin wallet, owned gear and worn gear are all saved in the browser on that phone. **There are no accounts and no online features.** Scores and coins don't move between phones and aren't shared between players.
+The high-score table, stats, settings (sound, CRT, tutorial done, last initials), coin wallet, owned gear and worn gear are all saved in the browser on that phone. **There are no accounts and no online features.** Scores and coins don't move between phones. The only way scores travel between players is a challenge link (section 7).
 
 ---
 
-## 12. Platform
+## 13. Platform
 
 - Runs in the phone's web browser. Nothing to download. Held sideways.
 - Installable as an app (Add to Home Screen). Once installed it opens fullscreen and **works offline**.
@@ -246,7 +259,7 @@ The high-score table, stats, settings (sound, CRT, tutorial done, last initials)
 
 ---
 
-## 13. Behind the scenes
+## 14. Behind the scenes
 
 - **Computer player:** plans moves by simulating the game ahead. It plays the title-screen demo and tests that every obstacle pattern is fair.
 - **Debug mode:** shows hitboxes, FPS and live sliders for all the gameplay numbers, so the feel can be tuned on a phone.
@@ -254,7 +267,7 @@ The high-score table, stats, settings (sound, CRT, tutorial done, last initials)
 
 ---
 
-## 14. Not in the game yet (already on the idea list)
+## 15. Not in the game yet (already on the idea list)
 
 - **Second theme:** a Bastar (Chhattisgarh, India) road with sal forest and village street. Speed breaker instead of cone, parked bicycle instead of trash can, culvert wall as the ledge, bamboo railing as the rail, pothole as the hole.
 - **Manuals:** balancing on two wheels to keep a combo alive across flat ground.
@@ -267,25 +280,25 @@ The high-score table, stats, settings (sound, CRT, tutorial done, last initials)
 
 ---
 
-## 15. Limits a new idea has to fit
+## 16. Limits a new idea has to fit
 
 - **Controls:** one thumb, using a tap and 4 swipe directions. A new move needs a gesture that doesn't clash with these, or must be automatic.
 - **Small screen:** 180 pixels tall. Text is 8 x 8 capitals and the skater is 16 x 24, so on-screen elements must be big and simple.
 - **16 colours only.** New art has to use the same palette.
-- **Phone browser, works offline.** Anything online (leaderboards between friends, accounts, multiplayer) would need a server, which the game doesn't have yet. Possible, but a bigger step.
+- **Phone browser, works offline.** Anything online (shared leaderboards, accounts, multiplayer) would need a server, which the game doesn't have yet. Possible, but a bigger step. Challenge links are the server-free way friends compete today.
 - **Fair:** new obstacles have to be possible to clear at every speed with human timing.
 - **Short sessions:** runs are a few minutes and should restart instantly.
 - **Made in code:** sprites are drawn from small pixel definitions and sounds are synthesized. Ideas that need detailed art or recorded audio are harder.
 
 ---
 
-## 16. Questions to start from
+## 17. Questions to start from
 
 - What would make you play "one more run"?
 - What would you want to spend coins on besides clothes?
 - What should unlock by playing rather than by buying?
 - What goals or challenges would keep you coming back each day?
 - What new obstacles or tricks would fit one-thumb controls?
-- How could friends compete, given there are no online features yet?
+- Beyond challenge links, how could friends compete without a server?
 - What would make a big combo feel even more exciting?
 - What should a second setting look like?
